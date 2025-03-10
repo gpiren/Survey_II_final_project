@@ -81,6 +81,12 @@ data <- data %>%
 
 
 
+data <- data |> 
+  mutate(id = 1:nrow(data)) |>  # Create unique respondent_id
+  select(id, everything())
+
+
+
 ```
 
 ## legal framework
@@ -100,7 +106,8 @@ legal_framework_data <- data %>%
     qc4_7,       # JOB CANDIDATE DISADVANTAGE: GENDER
     qc4_8,       # JOB CANDIDATE DISADVANTAGE: GENDER IDENTITY
     qc5_3,       # ACTIONS AGAINST DISCRIMINATION - JOINED ASSOCIATION/CAMPAIGN
-    country_name
+    country_name,
+    id
   )
 
 #convert to factor, for further processing 
@@ -225,7 +232,7 @@ str(lgbt_index)
 lgbt_index <- lgbt_index |> filter(Year== 2019)
 
 merged_data <- legal_framework_data %>%
-  inner_join(lgbt_index, by = c("country_name" = "Entity"))
+  left_join(lgbt_index, by = c("country_name" = "Entity"))
 
 ggplot(merged_data, aes(x = LGBT..Policy.Index, y = reorder(country_name, LGBT..Policy.Index), color = LGBT..Policy.Index)) +
   geom_point(size = 4) +
@@ -397,12 +404,13 @@ summary(merged_data)
 
 ```{r}
 micro_data <- merged_data %>%
-  select(
+  select(id,
    qc20, qc15_1, qc15_2, qc15_3, qc4_7, qc4_8, qc5_3
   )
 
+
 macro_data <- merged_data %>%
-  select( country_name, LGBT..Policy.Index, region, value
+  select(id, country_name, LGBT..Policy.Index, region, value
   )
 
 ```
