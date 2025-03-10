@@ -1,0 +1,269 @@
+---
+title: "Economic_variables_Diego"
+author: "Diego Fernández"
+date: "2025-03-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(haven)
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(corrplot)
+
+
+data <- read_dta("ZA7575.dta")
+data <- data %>%
+  mutate(country_name = case_when(
+    q1_1  == 1 ~ "Belgium",
+    q1_2  == 1 ~ "Denmark",
+    q1_3  == 1 ~ "Germany",
+    q1_4  == 1 ~ "Greece",
+    q1_5  == 1 ~ "Spain",
+    q1_6  == 1 ~ "France",
+    q1_7  == 1 ~ "Ireland",
+    q1_8  == 1 ~ "Italy",
+    q1_9  == 1 ~ "Luxembourg",
+    q1_10 == 1 ~ "Netherlands",
+    q1_11 == 1 ~ "Portugal",
+    q1_12 == 1 ~ "United Kingdom",
+    q1_13 == 1 ~ "Austria",
+    q1_14 == 1 ~ "Sweden",
+    q1_15 == 1 ~ "Finland",
+    q1_16 == 1 ~ "Cyprus",
+    q1_17 == 1 ~ "Czech Republic",
+    q1_18 == 1 ~ "Estonia",
+    q1_19 == 1 ~ "Hungary",
+    q1_20 == 1 ~ "Latvia",
+    q1_21 == 1 ~ "Lithuania",
+    q1_22 == 1 ~ "Malta",
+    q1_23 == 1 ~ "Poland",
+    q1_24 == 1 ~ "Slovakia",
+    q1_25 == 1 ~ "Slovenia",
+    q1_26 == 1 ~ "Bulgaria",
+    q1_27 == 1 ~ "Romania",
+    q1_28 == 1 ~ "Croatia",
+    q1_29 == 1 ~ "Other countries",
+    q1_30 == 1 ~ "DK",
+    TRUE ~ NA_character_  # Falls keine der Bedingungen zutrifft
+  ))
+
+
+
+```
+
+## Economic Variables
+
+Now, we will explore the economic variables
+
+```{r}
+# FIRST, we select qc19 question and the rest of economic variables:
+
+
+
+economic_data <- data |> select(
+  "qc19", "country_name", "d11", "qa1","qa2_1":"qa2_8","qa3_1":"qa3_7", "qa6_1":"qa6_8", "qa12", "qa13", "qa14", "qa15_1":"qa15_5", "qa16_1":"qa16_4", "qa17", 
+         "d15a", "d15b", "d25", "d60", "d63") |> 
+  rename(age = d11, 
+         internac_trade = qa1,
+         reason_trade_benefit = qa2_1:qa2_8,
+         reason_trade_no_benefit = qa3_1:qa3_7,
+         job_impact_factors = qa6_1:qa6_8,
+         trade_tariffs = qa12,
+         trade_agreements = qa13,
+         online_purchases = qa14,
+         purchase_countries = qa15_1:qa15_5,
+         foreign_investments = qa16_1:qa16_4,
+         trust_EU_trade = qa17,
+         occupation = d15a,
+         past_occupation = d15b,
+         urban_rural = d25,
+         financial_difficulties = d60,
+         social_class = d63,
+     )
+
+
+# We will get the Actual Individual Consumption metric
+
+# While GDP is mainly an indicator of the level of economic activity, actual individual consumption (AIC) is an alternative indicator better adapted to describe the material welfare of households. found here (https://ec.europa.eu/eurostat/statistics-explained/index.php?title=GDP_per_capita,_consumption_per_capita_and_price_level_indices#Data_sources)
+
+AIC_per_capita <- read_excel("AIC_per_capita.xlsx")
+
+AIC_per_capita <- AIC_per_capita |> rename("countries"="TIME")
+
+AIC_per_capita
+# We will get the unemployment rate
+
+unemployment_rate <- read_excel("unemployment_rate.xlsx")
+unemployment_rate <-unemployment_rate |>  pivot_longer(-countries, names_to = "years", values_to = "unemployment_rate") |> filter(years == 2019) |> select(-years)
+unemployment_rate$unemployment_rate <- as.numeric(unemployment_rate$unemployment_rate)
+
+unemployment_rate
+# We will get the minimum wage
+minimum_wage <- read_excel("EU_minimum_wage.xlsx")
+minimum_wage <- minimum_wage |> pivot_longer(-countries, names_to = "years", values_to = "min_wage")|> filter(years == 2019) |> select(-years)
+minimum_wage$min_wage <- as.numeric(minimum_wage$min_wage)
+minimum_wage
+
+# Merge the economic variables: 
+
+AIC_and_unemployment <- full_join(AIC_per_capita, unemployment_rate, by = "countries")
+economic_variables <- full_join(AIC_and_unemployment,minimum_wage, by = "countries")
+economic_variables
+# Finally, we merge the original survey data with the new economic variables
+final_economic_variables <- economic_data |> left_join(economic_variables, by = c("country_name" = "countries"))
+
+
+```
+
+```{r}
+# Now we will analyze the data: Check for Missing Data. The Na´s that are in the survey are because there are 2 possibilities to choose in the questionnaire so, if the participants choose one question, the other will get Na. I will change those Na with 0. In the past_occupation case, having a 0 will signify that there was no previous coupation.
+
+colSums(is.na(final_economic_variables))
+
+cols_to_replace <- c("reason_trade_benefit1", "reason_trade_benefit2", "reason_trade_benefit3", 
+                     "reason_trade_benefit4", "reason_trade_benefit5", "reason_trade_benefit6", 
+                     "reason_trade_benefit7", "reason_trade_benefit8", 
+                     "reason_trade_no_benefit1", "reason_trade_no_benefit2", "reason_trade_no_benefit3", 
+                     "reason_trade_no_benefit4", "reason_trade_no_benefit5", "reason_trade_no_benefit6", 
+                     "reason_trade_no_benefit7", "purchase_countries1", "purchase_countries2", 
+                     "purchase_countries3", "purchase_countries4", "purchase_countries5", "past_occupation")
+
+
+final_economic_variables <- final_economic_variables |> mutate(across(all_of(cols_to_replace), ~ replace_na(., 0)))
+
+# the rest of the variables with NA´s are due to a lack of information of those countries.
+
+final_economic_variables
+
+
+```
+
+Now, let´s do exploratory data analysis:
+
+```{r}
+
+
+summary(final_economic_variables)
+
+# I´ll check the distribution of the dependent variable (qc19): Most of the respondents said "Yes" to the question "Do you think that transgender persons should be able to change their civil documents to match their inner gender identity?"
+
+ggplot(final_economic_variables, aes(x = as.factor(qc19))) +
+  geom_bar(fill = "steelblue") +
+  labs(title = "Support for Transgender Individuals Obtaining Official Documents",
+       x = "Support Level (qc19)", y = "Count") +
+  theme_minimal()
+
+# distribution of categorical variables: 
+
+# the vast majority of respondents said: Yes, international trade is benefiting somewhat
+
+ggplot(final_economic_variables, aes(x = as.factor(internac_trade))) +
+  geom_bar() +
+  labs(title = "Distribution of Trade Benefit Responses", x = "Trade Benefit", y = "Count")
+
+## Numeric variable analysis:
+AIC_analysis <- final_economic_variables |> distinct(country_name, AIC)
+# distribution of AIC
+ggplot(AIC_analysis, aes(x = reorder(country_name, -AIC), y = AIC)) +
+  geom_bar(stat = "identity", fill = "darkgreen") +
+  coord_flip() +  # Rotate for better readability
+  labs(title = "Distribution of AIC (Adjusted Income per Capita)",
+       y = "AIC", x = "Country") +
+  theme_minimal()
+
+#minimum salary distribution
+
+Salary_analysis <- final_economic_variables |> distinct(country_name, min_wage)
+
+ggplot(Salary_analysis, aes(x = reorder(country_name, -min_wage), y = min_wage)) +
+  geom_bar(stat = "identity", fill = "darkred") +
+  coord_flip() +
+  labs(title = "Minimum Wage per Country", y = "Minimum Wage", x = "Country") +
+  theme_minimal()
+# unemployment rate 
+
+unemployment_rate_analysis <- final_economic_variables |> distinct(country_name, unemployment_rate)
+
+ggplot(unemployment_rate_analysis, aes(x = reorder(country_name, -unemployment_rate), y = unemployment_rate)) +
+  geom_bar(stat = "identity", fill = "darkblue") +
+  coord_flip() +
+  labs(title = "Unemployment Rate per Country", y = "Unemployment Rate (%)", x = "Country") +
+  theme_minimal()
+
+
+```
+
+
+```{r}
+# relations
+
+# Correlation Between Economic & Survey Variables
+
+
+# Select only numeric variables for correlation analysis
+numeric_vars <- final_economic_variables %>% select(age, qc19, internac_trade, trade_tariffs,
+                                                    trade_agreements, online_purchases,
+                                                    trust_EU_trade, occupation, past_occupation,
+                                                    urban_rural, financial_difficulties,
+                                                    social_class, unemployment_rate, AIC, min_wage)
+
+cor_matrix <- cor(numeric_vars, use = "complete.obs", method = "spearman")
+
+corrplot(cor_matrix, method = "color", type = "lower", tl.cex = 0.5)
+
+
+# trans support (qc19) by country (first we will filter the number 1: yes and make it numeric)
+final_economic_variables <- final_economic_variables |> 
+  mutate(qc19 = as.numeric(qc19))
+
+level_support <- final_economic_variables |> 
+  filter(qc19 == 1)
+
+ggplot(level_support, aes(x = reorder(country_name, -qc19), fill = country_name)) +
+  geom_bar() +
+  labs(title = "Trans Support by Country", 
+       x = "Country", y = "Count of Support (qc19)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  guides(fill = "none")
+# The graph doesn´t match with the one in the pdf (check it out)
+
+
+
+
+
+
+#This table presents data on support rates for transgender rights  and Adjusted Individual Consumption (AIC) per country. The main goal is to understand whether economic prosperity is linked to greater support for trans rights. France (0.72) and Belgium (0.71) show the highest support levels. Wealthier countries (e.g., Germany with an AIC of 2,149,651 and France with 1,534,823) tend to show higher support levels.
+
+support_rates <- final_economic_variables %>%
+  group_by(country_name) %>%
+  summarise(support_rate = sum(qc19 == 1, na.rm = TRUE) / sum(qc19 %in% c(1, 2, 3), na.rm = TRUE),
+            AIC = mean(AIC, na.rm = TRUE))  
+  
+support_rates
+
+
+# Support for Trans Rights by International Trade Benefit. If the responses are Not benefiting  (international trade), the support for trans rights decreases a lot. 
+ggplot(final_economic_variables, aes(x = as.factor(internac_trade), fill = as.factor(qc19))) +
+  geom_bar(position = "dodge") +
+  labs(title = "Support for Trans Rights by International Trade Benefit",
+       x = "International Trade Benefit", 
+       y = "Count", 
+       fill = "Support for Trans Rights (qc19)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+
+
+
+
