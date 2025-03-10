@@ -1,0 +1,751 @@
+---
+title: "Irantzu_survey"
+author: "Irantzu Lamarca"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## societal attitudes toward LGBTI rights
+
+```{r}
+
+library(haven)
+library(dplyr)
+library(tidyverse)
+library(readr)
+
+# import the dataset 
+data <- read_dta("ZA7575.dta")
+
+# Extraer etiquetas de variables
+column_info <- data.frame(
+  column_name = colnames(data),
+  column_label = sapply(data, function(x) attr(x, "label"))
+)
+
+# Verificar las etiquetas de variables
+print(column_info)
+
+# Crear variable de nombre de país
+data <- data %>%
+  mutate(country_name = case_when(
+    q1_1  == 1 ~ "Belgium",
+    q1_2  == 1 ~ "Denmark",
+    q1_3  == 1 ~ "Germany",
+    q1_4  == 1 ~ "Greece",
+    q1_5  == 1 ~ "Spain",
+    q1_6  == 1 ~ "France",
+    q1_7  == 1 ~ "Ireland",
+    q1_8  == 1 ~ "Italy",
+    q1_9  == 1 ~ "Luxembourg",
+    q1_10 == 1 ~ "Netherlands",
+    q1_11 == 1 ~ "Portugal",
+    q1_12 == 1 ~ "United Kingdom",
+    q1_13 == 1 ~ "Austria",
+    q1_14 == 1 ~ "Sweden",
+    q1_15 == 1 ~ "Finland",
+    q1_16 == 1 ~ "Cyprus",
+    q1_17 == 1 ~ "Czech Republic",
+    q1_18 == 1 ~ "Estonia",
+    q1_19 == 1 ~ "Hungary",
+    q1_20 == 1 ~ "Latvia",
+    q1_21 == 1 ~ "Lithuania",
+    q1_22 == 1 ~ "Malta",
+    q1_23 == 1 ~ "Poland",
+    q1_24 == 1 ~ "Slovakia",
+    q1_25 == 1 ~ "Slovenia",
+    q1_26 == 1 ~ "Bulgaria",
+    q1_27 == 1 ~ "Romania",
+    q1_28 == 1 ~ "Croatia",
+    q1_29 == 1 ~ "Other countries",
+    q1_30 == 1 ~ "DK",
+    TRUE ~ NA_character_
+  ))
+
+```
+
+Key Variables Explaining Support for Transgender People (cq19)
+- cq19: Opinion on whether transgender people should be able to change official documents.
+- country / country_name: Country code or name of the respondent's country (for country analysis).
+- d11: Respondent's exact age (key socio-demographic factor).
+- d10: Gender of the respondent (Male/Female).
+- d8: Level of education (impact of education on support for trans rights).
+- qc1_4: Perceived discrimination based on sexual orientation in the country.
+- qc1_8: Perceived discrimination against transgender people in the country.
+- qc2_4: Personal experience of discrimination based on sexual orientation.
+- qc2_6: Personal experience of discrimination for being trans.
+- qc4_8: Perceived disadvantage in employment due to gender identity.
+
+Variables Measuring Social Attitudes towards LGBTI+ Rights
+- qc15_1: Opinion on whether LGB people should have the same rights as heterosexuals.
+- qc15_2: Opinion on whether same-sex relationships are normal.
+- qc15_3: Opinion on whether same-sex marriage should be allowed in Europe.
+- qc17_3: Opinion on whether schools should inform about diversity in sexual orientation.
+- qc17_4: Opinion on whether schools should report on diversity in gender identity.
+- qc18_2: Opinion on whether two men can show affection in public without a problem.
+- qc18_3: Opinion on whether two women can show affection in public without a problem.
+- qc20: Opinion on whether official documents should include a third gender option.
+
+
+```{r}
+# 📌 Seleccionar variables clave para el análisis
+data_clean <- data %>%
+  select(country_name,  # País del encuestado
+         qc19,  # Apoyo a personas trans en documentos oficiales
+         d11,   # Edad del encuestado
+         d10,   # Género
+         d8,    # Nivel educativo
+         qc1_4, qc1_8, qc2_4, qc2_6, qc4_8,  # Discriminación y percepción de desigualdad
+         qc15_1, qc15_2, qc15_3,  # Opiniones sobre derechos LGB
+         qc17_3, qc17_4, qc18_2, qc18_3,  # Actitudes sobre diversidad
+         qc20)  # Opinión sobre tercera opción de género en documentos oficiales
+
+#--------------------------------------------------------
+#verificacion
+# Ver los valores únicos de cada variable antes de transformarlas en factores
+unique(data_clean$qc19)  # Debería contener valores como 1, 2, 3, 4
+unique(data_clean$qc1_4) # Aquí vemos si hay más o menos de 3 valores esperados
+unique(data_clean$qc1_8)
+unique(data_clean$qc2_4)
+unique(data_clean$qc2_6)
+unique(data_clean$qc4_8)
+unique(data_clean$qc15_1)
+unique(data_clean$qc15_2)
+unique(data_clean$qc15_3)
+unique(data_clean$qc17_3)
+unique(data_clean$qc17_4)
+unique(data_clean$qc18_2)
+unique(data_clean$qc18_3)
+unique(data_clean$qc20)
+
+#-------------------------------------------------------------
+# 📌 Transformar variables en factores con etiquetas descriptivas
+# Transformar variables a factores con etiquetas correctas
+data_clean <- data_clean %>%
+  mutate(
+    # Variable principal del estudio (Apoyo a personas trans en documentos oficiales)
+    qc19 = factor(qc19, levels = c(1,2,3),
+                  labels = c("Yes", "No", "DK")),
+    
+    # Género y educación
+    d10 = factor(d10, levels = c(1,2),
+                 labels = c("Man", "Woman")),
+    d8 = factor(d8),  # Mantener educación como factor
+    
+    # Variables con solo 2 niveles ("Sí", "No")
+    qc2_4 = factor(qc2_4, levels = c(0,1), labels = c("No", "Yes")),
+    qc2_6 = factor(qc2_6, levels = c(0,1), labels = c("No", "Yes")),
+    qc4_8 = factor(qc4_8, levels = c(0,1), labels = c("No", "Yes")),
+
+    # Variables con 3 niveles ("Sí", "No", "No sabe")
+    qc20 = factor(qc20, levels = c(1,2,3), labels = c("Yes", "No", "DK")),
+
+    # Variables con 5 niveles (Escala Likert de 5 puntos)
+    qc15_1 = factor(qc15_1, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+    qc15_2 = factor(qc15_2, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+    qc15_3 = factor(qc15_3, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+    qc17_3 = factor(qc17_3, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+    qc17_4 = factor(qc17_4, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+
+    # Variables con 6 niveles (Escala Likert de 6 puntos)
+    qc1_4 = factor(qc1_4, levels = c(1,2,3,4,5,6),
+                   labels = c("Very widespread", "Fairly widespread", "Fairly rare", "Very rare", "Non-existent", "DK")),
+    qc1_8 = factor(qc1_8, levels = c(1,2,3,4,5,6),
+                   labels = c("Very widespread", "Fairly widespread", "Fairly rare", "Very rare", "Non-existent", "DK")),
+
+    # Variables con 12 niveles (Escala extendida)
+    qc18_2 = factor(qc18_2, levels = c(1,2,3,4,5,6,7,8,9,10,11,12)),
+    qc18_3 = factor(qc18_3, levels = c(1,2,3,4,5,6,7,8,9,10,11,12))
+  )
+
+
+# 📌 Eliminar valores faltantes
+sum(is.na(data_clean))  # Cuenta el total de valores faltantes en todo el dataset
+
+
+# 📌 Ver resumen del dataset limpio
+summary(data_clean)
+
+```
+
+## DESCRIPTIVE ANALYSIS 
+
+# General statistics from the dataset
+```{r}
+# Número total de observaciones (encuestados)
+n_respondents <- nrow(data_clean)
+
+# Número de países en la encuesta
+n_countries <- length(unique(data_clean$country_name))
+
+# Mostrar resultados
+cat("Número total de encuestados:", n_respondents, "\n")
+cat("Número total de países:", n_countries, "\n")
+
+# Resumen de variables numéricas clave
+summary(data_clean[, c("d11")])  # Edad de los encuestados
+
+```
+
+The data set analyzed includes a total of **27,438 respondents** from **28 countries**, which provides a representative sample to study attitudes towards supporting trans people in obtaining official documents. Regarding the variable **age (`d11`)**, a wide distribution is observed, with an age range between **15 and 98 years**. The mean age of the respondents is **51.56 years**, indicating that the sample is mostly composed of older adults. In addition, the median age is **53 years**, suggesting that half of the respondents are **53 years or younger**, while the other half are older. The **first quartile (37 years old)** and **third quartile (66 years old)** show that 50% of the sample is in an age range between **37 and 66 years old**, which allows us to analyze generational differences in support for trans rights. The age of respondents is a key factor in this analysis, as attitudes towards LGBTI rights can vary significantly by age group, with younger generations generally showing greater acceptance in previous studies.
+
+# Distribution of the support for trans people (qc19)
+```{r}
+# Frecuencias absolutas y relativas
+table_qc19 <- data_clean %>%
+  count(qc19) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+print(table_qc19)
+
+ggplot(data_clean, aes(x = qc19, fill = qc19)) +
+  geom_bar() +
+  labs(title = "Distribución del Apoyo a Personas Trans",
+       x = "Nivel de Apoyo", y = "Número de Respuestas") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Blues")
+
+```
+The survey results regarding support for transgender individuals obtaining official documents (`qc19`) reveal key insights into public opinion. A **majority (52.71%)** of respondents express support for this right, indicating a general positive attitude toward transgender inclusivity in legal documentation. However, **35.33% oppose** the idea, showing that a significant portion of the population still holds reservations or negative views on the issue. Additionally, **11.95% of respondents answered "Don't Know (DK)"**, suggesting a level of uncertainty or lack of awareness regarding the topic.
+
+These results highlight a **clear, but not overwhelming, majority in favor of transgender rights**, which may reflect broader trends in social acceptance and legal progress in different countries. However, the **considerable opposition (over one-third of respondents)** suggests that cultural, political, and religious factors likely play a role in shaping attitudes toward transgender individuals. The presence of nearly **12% undecided respondents** indicates that educational initiatives and policy discussions could influence public opinion further. Future research should explore the specific demographic and geographic factors that contribute to these differences in attitudes.
+
+# Trans people support by country
+```{r}
+table_country_qc19 <- data_clean %>%
+  group_by(country_name, qc19) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100) %>%
+  arrange(desc(percentage))
+
+print(table_country_qc19)
+
+ggplot(data_clean, aes(x = fct_reorder(country_name, as.numeric(qc19)), fill = qc19)) +
+  geom_bar(position = "fill") +
+  labs(title = "Apoyo a Personas Trans por País",
+       x = "País", y = "Proporción de Respuestas", fill = "Apoyo") +
+  theme_minimal() +
+  coord_flip()
+
+```
+
+The support for transgender individuals obtaining official documents varies significantly across countries, as shown in the graph. Western European countries, such as Austria, Belgium, Denmark, Finland, France, Germany, Greece, Ireland, Luxembourg, Malta, the Netherlands, Portugal, Spain, Sweden, and the United Kingdom, exhibit higher levels of support (red section), indicating strong societal acceptance of transgender rights in these regions, which aligns with their strong LGBTQ+ rights policies and progressive social attitudes. Countries like the Netherlands and Spain have been pioneers in LGBTQ+ legal protections, which likely contributes to these high acceptance rates.
+
+Conversely, Eastern European countries, including Bulgaria, Croatia, Cyprus, the Czech Republic, Estonia, Hungary, Italy, Latvia, Lithuania, Poland, Romania, Slovakia, and Slovenia, demonstrate higher levels of opposition (green section) and uncertainty (blue section). In these nations, rejection of transgender rights appears more prevalent, likely influenced by cultural, religious, and political factors. This high opposition comes from  conservative social norms, religious influences, and less progressive legislation that contribute to lower support for transgender rights. Hungary and Romania stand out with the highest rejection rates, likely influenced by recent governmental policies that restrict LGBTQ+ rights
+
+The countries with the highest rejection rates include Poland, Romania, Lithuania, and Latvia, where opposition surpasses support. In contrast, Belgium, Austria, Denmark, and Spain display some of the highest acceptance rates.
+
+The significant percentage of “Don't Know” (DK) responses in certain countries suggests a lack of awareness or uncertainty and lack of public discourse or education on transgender issues; which may indicate a need for greater public discussion and education regarding transgender rights.Bulgaria, Cyprus, and Poland might benefit from more awareness campaigns to address knowledge gaps and clarify public opinions on transgender rights.
+
+These findings highlight a clear East-West divide in Europe regarding transgender rights, with Western European nations leading in support and Eastern European countries showing stronger resistance or ambivalence. This pattern aligns with broader trends in LGBTQ+ rights, where Western European countries tend to have more progressive policies and social attitudes compared to their Eastern counterparts.
+
+# Differences in suuport by sociodemographic characteristics
+```{r}
+table_qc19_gender <- data_clean %>%
+  group_by(d10, qc19) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+print(table_qc19_gender)
+
+ggplot(data_clean, aes(x = qc19, fill = d10)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Apoyo a Personas Trans por Género",
+       x = "Nivel de Apoyo", y = "Número de Respuestas", fill = "Género") +
+  theme_minimal()
+
+```
+
+The data reveals a clear gender-based difference in support for transgender individuals obtaining official documents. Women are more likely to support trans rights compared to men, as shown both in the numerical table and the bar chart. On the one hand, 54.64% of women support trans rights (Yes), compared to 50.40% of men.Higher support among women may be linked to greater empathy and openness to gender issues, which has been observed in previous research on LGBTQ+ rights. On the other hand, Men have a higher opposition rate (38.68%) compared to women (32.53%), indicating that men are more likely to reject transgender rights. Men's higher opposition rates could be influenced by traditional gender norms and conservative social attitudes that are more prevalent among male respondents. Adittionally, The percentage of respondents who are uncertain ("Don't Know") is slightly higher among women (12.81%) than among men (10.91%).The uncertainty among women suggests that some female respondents may be undecided rather than strictly opposed, indicating a potential opportunity for awareness and education efforts. In conclusion, the results highlight a gender gap in attitudes towards transgender rights, with women being more supportive and men showing more resistance. These differences underscore the importance of gender perspectives in policy discussions on transgender rights and suggest that targeted advocacy efforts might be necessary to address concerns among male populations. We will perform a chi-square test to know if these gender differences are statistically significant or not. 
+
+```{r}
+# 📌 Crear la tabla de contingencia
+data_matrix <- matrix(c(6296, 8167,  # Yes responses
+                        4832, 4863,  # No responses
+                        1364, 1916), # DK responses
+                      nrow = 2, byrow = TRUE)
+
+# Asignar nombres a las filas y columnas
+rownames(data_matrix) <- c("Man", "Woman")
+colnames(data_matrix) <- c("Yes", "No", "DK")
+
+# 📌 Ejecutar la prueba de Chi-Cuadrado
+chi_square_test <- chisq.test(data_matrix)
+
+# 📌 Mostrar los resultados
+print(chi_square_test)
+
+```
+Since p-value < 0.05, we reject the null hypothesis, which means that there is a statistically significant relationship between gender and support for transgender rights. The large X-squared value (2117) suggests that gender plays a strong role in shaping attitudes towards transgender individuals obtaining official documents. This confirms the pattern observed in the descriptive analysis: women are significantly more likely to support transgender rights than men, while men show a higher rate of opposition. So, we could say that the differences in support for transgender rights between men and women are not random, but statistically significant and that women are significantly more supportive, while men show more opposition.
+
+# Exploration of perceived discrimination
+```{r}
+table_discrimination <- data_clean %>%
+  count(qc1_4, qc1_8) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+print(table_discrimination)
+
+ggplot(data_clean, aes(x = qc1_4, fill = qc1_8)) +
+  geom_bar(position = "fill") +
+  labs(title = "Percepción de Discriminación: Orientación Sexual vs. Ser Trans",
+       x = "Percepción de Discriminación por Orientación Sexual",
+       y = "Proporción", fill = "Discriminación hacia Personas Trans") +
+  theme_minimal()
+
+```
+The provided data examine the relationship between perceived discrimination based on sexual orientation (qc1_4) and being transgender (qc1_8). The key findings reveal significant patterns of perceived discrimination across different categories. There is higher perceived discrimination for sexual orientation and transgender identity, since a significant proportion of respondents perceive discrimination against both LGB individuals and transgender people as "Very Widespread" or "Fairly Widespread".The most frequent response combination is "Fairly Widespread" for both categories, with 19% of respondents selecting this. Moreover, 7.96% of respondents believe that discrimination against both groups is "Very Widespread", reinforcing the idea that prejudice remains a serious issue in many societies. There is also a perception of "Non-Existent" Discrimination as only a small fraction of respondents believe that discrimination against either LGB or transgender individuals does not exist, exactly 1.58% of respondents consider that discrimination against trans people is non-existent, whereas 0.98% say the same for sexual orientation. This suggests that while some individuals do not acknowledge discrimination, they are a minority in the dataset.In addition, a notable proportion of respondents are uncertain about the level of discrimination.The highest rate of "Don't Know" responses appears when respondents also selected "Don't Know" for sexual orientation (7.03%), suggesting that awareness of discrimination issues may still be limited for some people.
+
+We will continue by identifying countries with the highest perceived discrimination and exploring correlations between discrimination perceptions and demographic variables. 
+
+```{r}
+#Countries with highest perceived discrimination
+
+# 📌 Load required libraries
+library(dplyr)
+library(ggplot2)
+
+# 📌 Filter data: Perceived discrimination as "Very Widespread" or "Fairly Widespread"
+data_discrimination <- data_clean %>%
+  filter(qc1_4 %in% c("Very widespread", "Fairly widespread") | 
+         qc1_8 %in% c("Very widespread", "Fairly widespread")) %>%
+  group_by(country_name) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))  # Sort from highest to lowest
+
+# 📌 Normalize by total respondents per country (percentage)
+total_per_country <- data_clean %>%
+  group_by(country_name) %>%
+  summarise(total = n())
+
+# 📌 Merge the counts and calculate the percentage
+data_discrimination <- merge(data_discrimination, total_per_country, by = "country_name") %>%
+  mutate(percentage = (count / total) * 100)
+
+# 📌 Visualization: Countries with the highest perceived discrimination
+ggplot(data_discrimination, aes(x = reorder(country_name, -percentage), y = percentage)) +
+  geom_bar(stat = "identity", fill = "red") +
+  coord_flip() +
+  labs(title = "Countries with Highest Perceived Discrimination",
+       x = "Country", y = "Percentage of Respondents") +
+  theme_minimal()
+
+# 📌 Print the table
+print(data_discrimination)
+
+```
+
+The analysis of perceived discrimination across countries reveals significant disparities in public opinion. Based on the data, Greece (76.29%) and Italy (75.16%) report the highest levels of perceived discrimination, followed closely by France (74.92%) and Portugal (69.54%). This suggests that in these countries, a significant proportion of respondents believe discrimination against LGBTI individuals is widespread.
+
+Conversely, countries such as Slovakia (23.98%), Estonia (31.34%), Latvia (32.25%), and Bulgaria (32.39%) report the lowest levels of perceived discrimination. This could indicate either lower actual discrimination levels or differing social perceptions and awareness regarding discrimination issues.
+
+The bar chart visually reinforces these findings, with Southern European countries tending to report higher discrimination levels, while Eastern European and Baltic nations report lower levels. These regional trends could be influenced by historical, cultural, and legislative factors, such as differing levels of legal protection, social attitudes toward LGBTI individuals, and the strength of anti-discrimination policies.
+
+We will continue with the correlations between discrimination perceptions and demographic variables. 
+```{r}
+# 📌 Convert categorical variables to numeric for correlation analysis
+data_numeric <- data_clean %>%
+  mutate(
+    qc1_4_num = as.numeric(factor(qc1_4, levels = c("Very widespread", "Fairly widespread", "Fairly rare", "Very rare", "Non-existent", "DK"))),
+    qc1_8_num = as.numeric(factor(qc1_8, levels = c("Very widespread", "Fairly widespread", "Fairly rare", "Very rare", "Non-existent", "DK"))),
+    d11 = as.numeric(d11),  # Age
+    d10_num = as.numeric(factor(d10, levels = c("Man", "Woman"))),  # Gender as numeric
+    d8_num = as.numeric(d8)  # Education level (if already numeric, this remains unchanged)
+  )
+
+# 📌 Calculate correlation matrix
+cor_matrix <- cor(data_numeric[, c("qc1_4_num", "qc1_8_num", "d11", "d10_num", "d8_num")], use = "complete.obs")
+
+# 📌 Print correlation matrix
+print(cor_matrix)
+
+# 📌 Visualization: Correlation Heatmap
+library(ggcorrplot)
+ggcorrplot(cor_matrix, lab = TRUE, colors = c("blue", "white", "red"))
+
+```
+
+The correlation analysis between perceived discrimination and demographic variables provides insightful findings regarding their relationships. The correlation matrix and heatmap reveal a strong positive correlation (0.64) between perceived discrimination based on sexual orientation and perceived discrimination towards transgender individuals. This suggests that individuals who perceive high levels of discrimination against one group also tend to perceive high levels of discrimination against the other, indicating a shared perception of marginalization across these identities.
+
+The correlation between age (**d11**) and perceived discrimination is positive but weak (0.19 with **qc1_4_num** and 0.20 with **qc1_8_num**). This suggests that older individuals tend to report slightly higher levels of perceived discrimination compared to younger individuals, but the effect is not strong.
+
+There is a moderate negative correlation between education level (**d8_num**) and perceived discrimination (-0.38 with **d11**, -0.08 with **qc1_8_num**, and -0.07 with **qc1_4_num**). This indicates that individuals with higher levels of education tend to report lower perceptions of discrimination, possibly reflecting a greater awareness of anti-discrimination policies or personal social positioning that mitigates exposure to discrimination.
+
+The correlation between gender (**d10_num**) and discrimination perceptions is near zero, suggesting that gender does not significantly influence how individuals perceive discrimination against LGBTQ+ groups in this dataset.
+
+The results highlight that perceptions of discrimination towards different LGBTQ+ groups are interconnected, with those who recognize discrimination against one group likely acknowledging it for another. Older individuals report slightly higher discrimination perceptions, while higher educational attainment appears to be associated with lower perceptions of discrimination. Gender does not seem to play a crucial role in shaping discrimination perceptions. These insights provide a valuable foundation for further exploring how societal attitudes and demographic factors shape perceptions of discrimination in different contexts.
+
+We will continue with some regression models to predict support for transgender individuals obtaining official documents (qc19) based on various demographic and attitudinal factors. First, since qc19 (support for transgender rights) is a categorical variable with three levels (Yes, No, Don't Know), we will use multinomial logistic regression. 
+
+```{r}
+
+library(nnet)
+
+# Convert qc19 into a factor variable for multinomial regression
+data_clean$qc19 <- factor(data_clean$qc19, levels = c("Yes", "No", "DK"))
+
+# Run a multinomial logistic regression model
+model_multinom <- multinom(qc19 ~ d10 + d11 + d8 + qc1_4 + qc1_8, data = data_clean)
+
+# Summary of the model
+summary(model_multinom)
+
+# Obtain odds ratios
+exp(coef(model_multinom))
+
+```
+The main results of the regression are as follows: 
+
+- Gender Differences:The coefficient for d10Woman (gender: woman) suggests that being a woman is associated with a higher likelihood of supporting transgender rights compared to men. This aligns with previous literature indicating that women tend to be more supportive of LGBTQ+ rights.
+- Age Influence (d11): The coefficient for d11 (age) suggests that an increase in age slightly reduces the probability of supporting transgender rights. This indicates that older individuals may be more resistant to policy changes regarding gender inclusivity.
+- Education Level (d8 & d82 to d89): Higher education levels (as captured by d8 variables) appear to have a significant positive impact on support for transgender rights. Respondents with more education are more likely to express support.
+Conversely, lower education levels are associated with a higher probability of being against or uncertain (DK) about transgender-inclusive policies.
+- Perception of Discrimination (qc1_4, qc1_8): Respondents who perceive discrimination based on sexual orientation or gender identity as widespread (qc1_4 & qc1_8) are more likely to support transgender rights.
+Those who believe discrimination is rare or non-existent tend to oppose transgender-inclusive policies.
+- Odds Ratios (Exp(Coef)): The exponentiated coefficients show how much more (or less) likely a respondent is to choose one category over another.
+Some of the strongest predictors include perceptions of discrimination (qc1_4, qc1_8) and education level (d8).
+
+Now, we will finish out descriptive analysis by performing some correlations between some key variables in order to have a broader view of everything. 
+
+```{r}
+data_numeric <- data_clean %>%
+  mutate(across(where(is.factor), as.numeric))
+
+# Calcular la matriz de correlación
+cor_matrix <- cor(data_numeric[, c("qc19", "qc1_4", "qc1_8", "qc15_1", "qc15_2", "qc15_3")], use = "pairwise.complete.obs")
+
+print(cor_matrix)
+
+library(reshape2)
+
+melted_cor <- melt(cor_matrix)
+
+ggplot(melted_cor, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +
+  scale_fill_gradient2(low="red", high="blue", mid="white", midpoint=0) +
+  theme_minimal() +
+  labs(title="Mapa de Correlaciones entre Variables Clave")
+
+```
+
+The correlation analysis among key variables provides valuable insights into the relationships between different perceptions and opinions. The correlation matrix and heatmap reveal notable associations. The strongest correlations are observed between qc15_1 (LGB rights statement: same rights as heterosexuals) and qc15_2 (LGB rights statement: nothing wrong with same-sex relationships), with a coefficient of 0.765, as well as between qc15_2 and qc15_3 (LGB rights statement: allow same-sex marriage throughout Europe) at 0.817. These high correlations indicate that individuals who support equal rights for LGB individuals also tend to support same-sex marriage and affirm that there is nothing wrong with same-sex relationships.
+
+Furthermore, qc1_4 (perceived discrimination based on sexual orientation) and qc1_8 (perceived discrimination based on being transgender) exhibit a moderate correlation of 0.638, suggesting that those who perceive widespread discrimination against individuals based on their sexual orientation also tend to perceive discrimination against transgender individuals. This alignment indicates that public perceptions of discrimination against different marginalized groups are interrelated.
+
+The correlations between qc19 (support for a third gender option in official documents) and other variables are weaker but still notable, particularly with qc15_1 (0.408) and qc15_2 (0.414), implying that individuals who favor LGB rights also tend to support the inclusion of a third gender option. However, the correlations are not extremely strong, indicating that while these attitudes are related, they are not entirely dependent on one another.
+
+Overall, the analysis suggests that perceptions of discrimination and support for LGBTQ+ rights are interconnected, but with varying degrees of association. The strongest relationships are observed between different aspects of LGB rights, while perceived discrimination and support for transgender rights also show moderate connections. These findings highlight the importance of considering intersectional perspectives when analyzing public attitudes toward discrimination and equality.
+
+We have already done some comparative analysis by country. However, we will deepen that by doing some more analysis for it. 
+
+##INFERENTIAL ANALYSIS 
+
+We will start by comparing comparing support for LGBTI rights by country. 
+```{r}
+# Crear una tabla resumen del apoyo a los derechos LGBTI por país
+support_lgbti_country <- data_clean %>%
+  group_by(country_name, qc19) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100) %>%
+  filter(qc19 == "Yes") %>% # Nos quedamos solo con los que apoyan
+  arrange(desc(percentage))
+
+# Visualizar en gráfico de barras
+ggplot(support_lgbti_country, aes(x = reorder(country_name, percentage), y = percentage)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Apoyo a los Derechos LGBTI por País",
+       x = "País",
+       y = "Porcentaje de Apoyo") +
+  theme_minimal()
+
+```
+The bar chart illustrating support for LGBTI rights across different countries reveals significant variation in societal attitudes. The Netherlands, Spain, and Malta emerge as the countries with the highest levels of support, indicating a strong societal endorsement of LGBTI rights in these regions. Countries such as Luxembourg, Denmark, France, Belgium, and Portugal also show considerable support, reflecting a broader trend of acceptance in Western and Northern Europe.
+
+Conversely, Bulgaria, Hungary, and Romania exhibit the lowest levels of support, highlighting persistent societal resistance to LGBTI rights in these regions. This pattern aligns with broader trends observed in Central and Eastern Europe, where more conservative attitudes towards gender and sexual diversity are prevalent. The data suggest that historical, cultural, religious, and political factors may play a crucial role in shaping public opinion on LGBTI rights.
+
+Overall, the disparities between countries indicate that while some European nations have made significant strides toward inclusivity, others continue to lag, demonstrating the need for continued efforts in policy-making, education, and advocacy to foster greater acceptance and equal rights for LGBTI individuals across Europe.
+
+Geographical tendency analysis
+```{r}
+# Comparación entre Europa Occidental y Europa del Este
+data_clean <- data_clean %>%
+  mutate(region = case_when(
+    country_name %in% c("Belgium", "Denmark", "France", "Germany", "Ireland", "Luxembourg", "Netherlands", "Sweden", "Spain", "Portugal") ~ "Western Europe",
+    country_name %in% c("Poland", "Hungary", "Czech Republic", "Slovakia", "Lithuania", "Latvia", "Romania", "Bulgaria") ~ "Eastern Europe",
+    TRUE ~ "Other"
+  ))
+
+# Calcular el porcentaje de apoyo en cada región
+support_by_region <- data_clean %>%
+  group_by(region, qc19) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100) %>%
+  filter(qc19 == "Yes") 
+
+# Visualización del apoyo a derechos LGBTI por región
+ggplot(support_by_region, aes(x = region, y = percentage, fill = region)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Apoyo a los Derechos LGBTI por Región",
+       x = "Región",
+       y = "Porcentaje de Apoyo") +
+  theme_minimal()
+
+```
+
+The bar chart comparing support for LGBTI rights by region reveals clear geographic disparities in societal attitudes. Western Europe demonstrates the highest level of support, significantly surpassing both Eastern Europe and the "Other" category. This suggests that countries in Western Europe have more progressive attitudes toward LGBTI rights, likely influenced by long-standing legal protections, inclusive policies, and strong advocacy movements.
+
+In contrast, Eastern Europe shows the lowest level of support, reinforcing the notion that this region faces greater societal and political resistance to LGBTI rights. This aligns with previous findings indicating that cultural conservatism, religious influences, and political ideologies play a significant role in shaping public opinion in these countries. 
+
+The "Other" category, which likely includes countries with mixed levels of acceptance, falls in between these two extremes, suggesting that attitudes toward LGBTI rights are more varied depending on specific national contexts. Overall, these regional differences highlight the uneven progress in achieving equal rights and acceptance for LGBTI individuals across Europe, emphasizing the need for targeted policies and advocacy efforts in less supportive regions.
+
+#---------------------------------------------------
+I need some varaibles here.
+Evaluate national factors that explain the differences
+```{r}
+# Cargar datos adicionales sobre PIB, nivel de democracia, religiosidad, etc.
+# Supongamos que tenemos un dataset llamado "country_factors" con variables a nivel nacional
+
+# Unir los datos de apoyo LGBTI con los factores nacionales
+data_combined <- support_lgbti_country %>%
+  left_join(country_factors, by = "country_name")
+
+# Evaluar correlaciones entre apoyo a LGBTI y factores nacionales
+cor_results <- cor(data_combined %>% select(percentage, GDP_per_capita, Democracy_Index, Religiosity), use = "complete.obs")
+
+# Visualización de las correlaciones
+library(ggcorrplot)
+ggcorrplot(cor_results, method = "circle", type = "lower",
+           title = "Correlaciones entre Apoyo LGBTI y Factores Nacionales")
+
+```
+#---------------------------------------------------------
+
+We will compute an ANOVA  to assess whether there are statistically significant differences between countries in the level of support for LGBTI rights.
+
+```{r}
+library(ggpubr)
+library(car)
+
+# Convertir qc19 a numérico asignando valores
+data_clean <- data_clean %>%
+  mutate(qc19_num = case_when(
+    qc19 == "Yes" ~ 1,
+    qc19 == "No" ~ 0,
+    qc19 == "DK" ~ NA_real_  # Opcional: excluir "No sabe"
+  ))
+
+# Verificar que la conversión se hizo correctamente
+table(data_clean$qc19, data_clean$qc19_num, useNA = "always")
+
+# Volver a correr el ANOVA con la variable numérica
+anova_model <- aov(qc19_num ~ country_name, data = data_clean)  # ANOVA de una vía
+summary(anova_model)
+
+```
+The ANOVA test results indicate a statistically significant difference in support for LGBTI rights across the 28 countries studied (F = 186.3, p < 2.2e-16). This extremely low p-value suggests that at least some countries significantly differ in their levels of support. The high F-value (186.3) reinforces the idea that country-level variations explain a substantial portion of the variance in qc19 (support for trans rights). However, the model does not indicate which countries differ from one another—it only confirms that differences exist.
+
+Additionally, 3,280 observations were removed due to missing values, which likely correspond to the "DK" (Don't Know) responses. This exclusion might affect the representativeness of the findings, depending on whether missing values are randomly distributed across countries.
+
+Since the ANOVA is significant, we must verify its assumptions before proceeding with further analysis. The steps you outlined are correct. We will perform the Levene's Test for Homogeneity of Variance and Tukey’s HSD Post-hoc Test for identifying which countries differ significantly. 
+
+```{r}
+# 1. Prueba de homogeneidad de varianza (Levene's Test)
+leveneTest(qc19_num ~ country_name, data = data_clean)
+
+# 2. Prueba post-hoc (si ANOVA es significativo)
+TukeyHSD(anova_model)  # Comparaciones múltiples entre países
+
+# 3. Visualización con Boxplot
+ggplot(data_clean, aes(x = country_name, y = qc19_num)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Diferencias en Apoyo a los Derechos LGBTI entre Países",
+       x = "País", y = "Nivel de Apoyo")
+
+```
+
+The results of the Levene’s test indicate that the assumption of homogeneity of variances is violated (p < 2.2e-16), meaning that the variability in support for LGBTI rights differs significantly across countries. This suggests that a one-way ANOVA may not be the most appropriate test, as it assumes equal variances among groups.
+
+The boxplot visualization further confirms substantial differences in support for LGBTI rights between countries. Some countries have consistently high support, while others show more variability. The presence of outliers and differences in spread highlight the need for further post-hoc comparisons.
+
+The Tukey HSD post-hoc test provides pairwise comparisons between countries to identify which specific countries differ significantly in their levels of support. This test helps pinpoint which country pairs show statistically significant differences, providing deeper insights into regional disparities.
+
+Given the violation of the homogeneity assumption, it may be beneficial to explore alternative approaches such as Welch’s ANOVA, which does not assume equal variances, or non-parametric methods like the Kruskal-Wallis test. We will proceed with this last option, as it is a nonparametric alternative to ANOVA and does not require the assumption of homogeneity of variance, it is useful when the distribution of the data is not normal or when the variances between groups are unequal, and it will allow us to assess whether there are significant differences in the level of support for LGBTI rights between countries without relying on strict assumptions.
+
+```{r}
+
+library(FSA)  # Para el Dunn’s Test
+
+# Convertir la variable de país a factor (si no lo es ya)
+data_clean$country_name <- as.factor(data_clean$country_name)
+
+# Realizar la prueba de Kruskal-Wallis
+kruskal_test <- kruskal.test(qc19 ~ country_name, data = data_clean)
+
+# Mostrar los resultados
+print(kruskal_test)
+
+```
+The Kruskal-Wallis test results indicate a chi-squared value of 3715.3 with 27 degrees of freedom (df) and a p-value < 2.2e-16. Since the p-value is extremely small (much lower than 0.05), we can reject the null hypothesis, which states that the distribution of support for LGBTI rights is the same across all countries. This means that there are significant differences in LGBTI support levels among countries.
+
+Since the Kruskal-Wallis test detected significant differences among countries, we need to perform Dunn’s post-hoc test to determine which specific countries differ from each other. This test will help us identify the exact pairs of countries with statistically significant differences in LGBTI support.
+
+```{r}
+
+unique(data_clean$qc19)
+data_clean$qc19_num <- as.numeric(factor(data_clean$qc19, 
+                                         levels = c("No", "DK", "Yes"),
+                                         labels = c(0, 1, 2)))  # Assign numbers
+
+table(data_clean$qc19, data_clean$qc19_num)
+
+data_clean$qc19_num <- as.numeric(as.factor(data_clean$qc19))
+
+data_clean_dunn <- na.omit(data_clean[, c("qc19_num", "country_name")])
+
+# Run Dunn’s Test
+dunn_test <- dunnTest(qc19_num ~ country_name, data = data_clean_dunn, method = "bonferroni")
+
+# View results
+print(dunn_test)
+
+
+# Realizar la prueba post-hoc de Dunn con corrección de Bonferroni
+dunn_test <- dunnTest(qc19_num ~ country_name, data = data_clean, method = "bonferroni")
+
+# Mostrar los resultados
+print(dunn_test)
+
+# Extraer los valores ajustados de p-value para interpretar diferencias significativas
+dunn_test$res
+
+#other option
+ggplot(data_clean, aes(x = country_name, y = as.numeric(qc19_num))) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Diferencias en Apoyo a los Derechos LGBTI entre Países",
+       x = "País", y = "Nivel de Apoyo")
+
+
+ggplot(data_clean, aes(x = country_name, fill = as.factor(qc19))) +
+  geom_bar(position = "fill") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Distribución del Apoyo a los Derechos LGBTI por País",
+       x = "País", y = "Proporción de Respuestas", fill = "Apoyo")
+
+
+```
+## This part might be wrong as the boxplot is not informative at all, I have to check it out. 
+
+
+## Predictive modeling
+
+Ordinal Logistic regression
+```{r}
+# Load required library
+library(MASS)
+
+# Ensure the response variable is an ordered factor
+data_clean$qc19 <- factor(data_clean$qc19, levels = c("No", "DK", "Yes"), ordered = TRUE)
+
+# Fit the ordinal logistic regression model
+ordinal_model <- polr(qc19 ~ d10 + d11 + d8 + qc1_4 + qc1_8, data = data_clean, Hess = TRUE)
+
+# Summary of the model
+summary(ordinal_model)
+
+# Convert coefficients into odds ratios
+exp(coef(ordinal_model))
+
+```
+
+The ordinal logistic regression results provide valuable insights into the factors influencing support for LGBTI rights. The coefficients indicate the direction and strength of the relationships between the predictor variables and the likelihood of supporting LGBTI rights. 
+
+- **Gender (d10Woman)**: A positive and significant coefficient suggests that women are more likely to support LGBTI rights than men. 
+- **Religious Affiliation (d11)**: The negative and significant coefficient for d11 implies that higher religiosity correlates with lower support for LGBTI rights.
+- **Discrimination Perceptions (qc1_4, qc1_8)**: The different categories of perceived discrimination show varied effects on support for LGBTI rights. For instance, higher perceptions of discrimination (e.g., "very widespread") tend to have a significant negative effect, indicating that those who believe discrimination is prevalent are less likely to support LGBTI rights.
+- **Other Sociodemographic Factors**: Several other variables (d82, d83, etc.) show significant relationships, indicating that different social, economic, and cultural characteristics play a role in shaping attitudes towards LGBTI issues.
+
+The **exponentiated coefficients (exp(coef))** help interpret these effects in terms of odds ratios. For example, values above 1 indicate an increased likelihood of supporting LGBTI rights, while values below 1 suggest a decreased likelihood. 
+
+As a conclusion, the model suggests that **gender, religiosity, and perceptions of discrimination are key predictors of support for LGBTI rights**. Women are more likely to express support, while those with stronger religious affiliations are less likely. Additionally, individuals who perceive widespread discrimination tend to be less supportive, which may indicate disillusionment or a belief that change is unlikely. This model provides a strong foundation for further refining predictive analytics regarding societal attitudes toward LGBTI rights. 
+
+We will add the interaction effects
+```{r}
+#Add testing interactions
+# Load necessary package
+library(MASS)  # polr function for ordinal logistic regression
+
+# Fit ordinal logistic regression with interaction terms
+ordinal_model_interactions <- polr(qc19 ~ d10 * d11 + d10 * qc1_4 + d11 * qc1_4 + 
+                                   d8 + qc1_8, data = data_clean, Hess = TRUE)
+
+# Summary of the model
+summary(ordinal_model_interactions)
+
+# Exponentiate coefficients to interpret odds ratios
+exp(coef(ordinal_model_interactions))
+```
+The results of the ordinal logistic regression model incorporating interaction terms suggest several key insights regarding societal attitudes toward LGBTI rights.
+
+First, individual demographic and opinion-based variables such as gender (d10Woman), attitudes toward discrimination (d11), and other socio-political factors significantly impact support for trans rights (qc19). The coefficient for d10Woman is positive and significant, indicating that women are more likely to support trans rights compared to men. Similarly, the negative coefficient for d11 suggests that individuals who perceive greater discrimination are more likely to show stronger support.
+
+Second, the inclusion of interaction terms reveals that certain combinations of factors influence attitudes in complex ways. For example, the interaction between d11 (discrimination perception) and qc1_4 (perceived prevalence of LGBTI discrimination) is significant, meaning that the impact of perceived discrimination on support for trans rights varies depending on how widespread an individual believes discrimination to be. Additionally, the interaction terms involving d10 (gender) and qc1_4 show that gender differences in attitudes are modulated by perceptions of LGBTI discrimination, further highlighting how socio-political perspectives shape societal attitudes.
+
+Furthermore, some variables exhibit extremely high coefficient values, suggesting potential issues with multicollinearity or outliers. These need to be further investigated to ensure model stability.
+
+Finally, the model's residual deviance (50970.31) and AIC (51188.31) indicate how well the model fits the data. While the interaction terms add complexity and depth to the model, further refinement—such as assessing multicollinearity, checking for influential observations, or using a mixed-effects model—might be necessary to improve the model’s predictive accuracy and interpretability.
+
+In conclusion, the interaction terms provide valuable insights into how different social and demographic factors jointly influence support for trans rights. Future analyses should further explore these interactions and validate the model's robustness through cross-validation or additional statistical techniques.
+
+Mixed effect models (country-level and individual-level effects)
+```{r}
+# Load required library
+library(lme4)
+
+# Fit mixed effects model with country as a random effect
+mixed_model <- glmer(qc19 ~ d10 + d11 + d8 + qc1_4 + qc1_8 + (1 | country_name), 
+                     data = data_clean, 
+                     family = binomial)
+
+# Summary of the model
+summary(mixed_model)
+
+```
+#Mi ordenador no tiene capacidad para procesar esto, lo pongo o lo quito??
+
+Principal component analysis PCA
+```{r}
+# Load required library
+library(FactoMineR)
+
+# Select only numerical variables for PCA
+data_pca <- data_clean[, c("qc1_4_num", "qc1_8_num", "d11", "d8")]
+
+# Perform PCA
+pca_model <- PCA(data_pca, scale.unit = TRUE, graph = TRUE)
+
+```
+No me deja running, me da error 
+
+Machine learning approach
+```{r}
+# Load required library
+library(randomForest)
+
+# Fit a Random Forest model
+rf_model <- randomForest(qc19 ~ d10 + d11 + d8 + qc1_4 + qc1_8, data = data_clean, ntree = 500)
+
+# Importance of variables
+importance(rf_model)
+
+# Print model summary
+print(rf_model)
+
+```
