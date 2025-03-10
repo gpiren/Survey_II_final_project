@@ -20,6 +20,7 @@ library(ggcorrplot)
 library(tidyr)
 library(scales)
 library(mice)
+library(readxl)
 ```
 
 Data:
@@ -320,3 +321,92 @@ regionSouthern Europe = +3.23\* Southern Europe has on average 3.23 points highe
 regionWestern Europe = +4.19\* Western Europe has on average 4.19 points higher LGBT rights than Eastern Europe. Western Europe is the most progressive, followed by Southern Europe and Northern Europe, while Eastern Europe has the lowest index as a reference category.
 
 In Northern & Southern Europe, disagreement with qc19 is strongly associated with lower LGBT rights - much more so than in Eastern Europe or Western Europe. In Western Europe, approval or disapproval of qc19 is not as important for the LGBT Policy Index, which means that other factors are more decisive there. In Northern Europe, rejection or uncertainty about a third option is associated with lower LGBT rights. In Southern Europe, uncertainty about qc20 has the opposite effect - there the discussion about the topic could be a sign of progress. In Western Europe, these issues hardly play a role in the LGBT index, as legal protection is high anyway. R² = 0.4341 43.4% of the variance in the LGBT Policy Index is explained by the model. p-value \< 2.2e-16 The model is highly significant.The new model explains 17% more variance, i.e. taking the region into account makes the model significantly better.
+
+
+
+
+
+
+## Macro/micro
+
+Macro level (country-specific factors)
+Monarchy/Republic (from eu_gov_styles_table)
+Bloc (from eu_blocs)
+internac_trade (international trade)
+trade_tariffs (trade tariffs)
+trade_agreements (trade agreements)
+online_purchases (online purchases)
+AIC (Adjusted Individual Consumption)
+unemployment_rate (unemployment rate)
+min_wage (minimum wage)
+LGBT..Policy.Index (Index for LGBT+ rights)
+hdi (humand development index)
+region 
+country
+
+
+Micro-level (individual factors)
+d10 (gender)
+D15b:   last occupation
+d25: rural vs urban 
+gen3, gen4, gen5, gen6 (generational affiliation)
+d1r2 (self-assessment of political ideology)
+d1r2 * d10 (Interaction: political ideology & gender)
+sd3_recode (religiosity, recoded from s3)
+d11 (age of the respondent)
+d8 (level of education)
+qc19 (Trans people should be allowed to change official documents)
+qc20 (Third gender option in official documents)
+qc15_1 (LGB people should have the same rights as heterosexuals)
+qc15_2 (Same-sex relationships are normal)
+qc15_3 (Same-sex marriage should be allowed in Europe)
+qc4_7 (Perceived discrimination at work because of gender)
+qc4_8 (Perceived job discrimination because of gender identity)
+qc5_3 (Commitment in an organization against discrimination)
+qc1_4 (Perceived discrimination due to sexual orientation)
+qc1_8 (Perceived discrimination against trans people)
+qc2_4 (Personal experience of discrimination based on sexual orientation)
+qc2_6 (Personal experience of discrimination because of trans identity)
+qc17_3 (Schools should provide information about sexual diversity)
+qc17_4 (Schools should provide information about gender identity)
+qc18_2 (Two men can show affection in public)
+qc18_3 (Two women can show affection in public)
+
+
+Data is from: https://hdr.undp.org/data-center/human-development-index#/indicies/HDI
+
+```{r}
+hdi_data <- read_excel("hdr-data.xlsx", sheet = 1)  
+
+hdi_data <- hdi_data |> filter(year=="2019" & indicatorCode == "hdi")
+
+merged_data
+
+hdi_data <- hdi_data %>%
+  rename(country_name = country)
+
+
+merged_data <- merged_data %>%
+  left_join(hdi_data, by = "country_name")
+
+summary(merged_data)
+
+```
+
+
+
+```{r}
+micro_data <- merged_data %>%
+  select(
+   qc20, qc15_1, qc15_2, qc15_3, qc4_7, qc4_8, qc5_3
+  )
+
+macro_data <- merged_data %>%
+  select( country_name, LGBT..Policy.Index, region, value
+  )
+
+```
+
+
+
+
