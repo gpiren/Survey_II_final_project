@@ -19,6 +19,7 @@ library(ggplot2)
 library(ggcorrplot)
 library(tidyr)
 library(scales)
+library(mice)
 ```
 
 Data:
@@ -83,7 +84,7 @@ data <- data %>%
 
 ## legal framework
 
-QC19:Do you think that transgender persons should be able to change their civil documents to match their inner gender identity?(1=yes, 2=no,3=dk) QC20: Do you believe that official documents, like passports and birth certificates, should have a third option, such as X or O (other) beside male (M) and female (F)for those persons who do not identify as female and male? (1=yes, 2=no,3=dk) QC15_1: to what extend to do you agree or disagree with the following statement? Gay, lesbian and bisexual people should have the same rights as heterosexual people (1 2 3 4 5) QC15_2: to what extend to do you agree or disagree with the following statement? here is nothing wrong in a sexual relationship between two persons of the same sex(1 2 3 4 5) QC15_3: to what extend to do you agree or disagree with the following statement? Same sex marriages should be allowed throughout europe (1 2 3 4 5) QC4_7: In (OUR COUNTRY) when a company wants to hire someone and has the choice between two candidates with equal skills and qualifications, which of the following criteria may, in your opinion, put one candidate at a disadvantage? The candidate’s gender or sex (man or woman) QC4_8: In (OUR COUNTRY) when a company wants to hire someone and has the choice between two candidates with equal skills and qualifications, which of the following criteria may, in your opinion, put one candidate at a disadvantage? The candidate’s gender identity (being transgender) QC5_3: in the last 12 month have you done: You have joined an association or campaign that defends people against discrimination? (1=yes, 2=no,3=dk) 
+QC19:Do you think that transgender persons should be able to change their civil documents to match their inner gender identity?(1=yes, 2=no,3=dk) QC20: Do you believe that official documents, like passports and birth certificates, should have a third option, such as X or O (other) beside male (M) and female (F)for those persons who do not identify as female and male? (1=yes, 2=no,3=dk) QC15_1: to what extend to do you agree or disagree with the following statement? Gay, lesbian and bisexual people should have the same rights as heterosexual people (1 2 3 4 5) QC15_2: to what extend to do you agree or disagree with the following statement? here is nothing wrong in a sexual relationship between two persons of the same sex(1 2 3 4 5) QC15_3: to what extend to do you agree or disagree with the following statement? Same sex marriages should be allowed throughout europe (1 2 3 4 5) QC4_7: In (OUR COUNTRY) when a company wants to hire someone and has the choice between two candidates with equal skills and qualifications, which of the following criteria may, in your opinion, put one candidate at a disadvantage? The candidate’s gender or sex (man or woman) QC4_8: In (OUR COUNTRY) when a company wants to hire someone and has the choice between two candidates with equal skills and qualifications, which of the following criteria may, in your opinion, put one candidate at a disadvantage? The candidate’s gender identity (being transgender) QC5_3: in the last 12 month have you done: You have joined an association or campaign that defends people against discrimination? (1=yes, 2=no,3=dk)
 
 ```{r}
 #| echo: false
@@ -125,12 +126,12 @@ print(desc_stats)
 
 ```
 
-The analysis shows clear differences in support for various aspects of LGBT+ rights. It is particularly noticeable that both transgender-relevant topics and LGB rights tend to be rated positively overall, but with certain differences in the intensity of approval.
-The average agreement with the possibility of transgender people being able to adapt their official documents to their gender identity (qc19) is 1.59. This indicates that a majority of respondents are in favor of this measure, although “Don't Know” responses could play a role. The introduction of a third gender option on official documents (qc20) received slightly less approval with an average value of 1.72, which indicates that this measure is discussed somewhat more controversially.
+The analysis shows clear differences in support for various aspects of LGBT+ rights. It is particularly noticeable that both transgender-relevant topics and LGB rights tend to be rated positively overall, but with certain differences in the intensity of approval. The average agreement with the possibility of transgender people being able to adapt their official documents to their gender identity (qc19) is 1.59. This indicates that a majority of respondents are in favor of this measure, although “Don't Know” responses could play a role. The introduction of a third gender option on official documents (qc20) received slightly less approval with an average value of 1.72, which indicates that this measure is discussed somewhat more controversially.
 
 In comparison, the values for the general equality of LGB people (qc15_1,, qc15_2 , qc15_3) are more on the approving side of the scale with average values between 2.17 and 2.38 (1 = strongly approve, 5 = strongly disapprove). This means that the majority of respondents tend to agree with these statements. However, the values are not extremely low, which indicates that there is still a certain skepticism or reluctance in parts of the population.
 
 Identifiying how much people chooses the third option: "i dont know" in percentage:
+
 ```{r}
 dk_percentage <- legal_framework_data %>%
   summarise(
@@ -141,10 +142,11 @@ dk_percentage <- legal_framework_data %>%
 dk_percentage
 
 ```
-qc19 (Transgender people should be able to adapt official documents) → 11.95%
-qc20 (Third gender option in official documents) → 11.62%
 
-Country differences: 
+qc19 (Transgender people should be able to adapt official documents) → 11.95% qc20 (Third gender option in official documents) → 11.62%
+
+Country differences:
+
 ```{r}
 
 dk_summary <- legal_framework_data %>%
@@ -170,8 +172,8 @@ ggplot(dk_summary, aes(x = reorder(country_name, DK_Percentage), y = DK_Percenta
 
 
 ```
--> yyou can see clear differences in the response rates. While in bulgaria every 5. person selected "dont know" for transgender document change (qc19) in Belgium only less than 5% choosed this option.
 
+-\> yyou can see clear differences in the response rates. While in bulgaria every 5. person selected "dont know" for transgender document change (qc19) in Belgium only less than 5% choosed this option.
 
 Transgender Rights in Europe: Which Countries Support Legal Gender Changes?
 
@@ -184,25 +186,6 @@ qc19_summary_sorted <- legal_framework_data %>%
   mutate(percentage = (count / total_responses) * 100) %>%
   filter(qc19 == "1") %>%
   arrange(percentage)
-
-
-ggplot(qc19_summary_sorted, aes(x = reorder(country_name, percentage), y = percentage, fill = percentage)) +
-  geom_bar(stat = "identity", color = "black", width = 0.7) +
-  coord_flip() +
-  scale_fill_gradient(low = "lightblue", high = "darkblue") +
-  geom_text(aes(label = paste0(round(percentage, 1), "%")), hjust = -0.2, size = 5, fontface = "bold") +
-  labs(
-    title = "Support for Transgender Document Change (qc19) per Country",
-    x = "Country",
-    y = "Support Rate (%)"
-  ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 14),
-    legend.position = "none"
-  )
 
 
 ggplot(qc19_summary_sorted, aes(x = reorder(country_name, percentage), y = percentage, fill = percentage)) +
@@ -229,11 +212,10 @@ ggplot(qc19_summary_sorted, aes(x = reorder(country_name, percentage), y = perce
 
 
 ```
+
 Results: The Netherlands (88%), Spain (76%) and Malta (76%) are the countries with the highest approval ratings.Countries such as Germany (62%), Sweden (62%) and Austria (57%) also show a majority in favor of changing the law, but at a lower level than the frontrunners. In these countries, there appears to be ongoing social debate and differing opinions. Bulgaria (12%), Hungary (14%), Romania (22%) and Slovakia (24%) have the lowest approval ratings.
 
-
-Because there arent so many variables for legal framework, we included the lgtb-rights index-data.
-The Data is from: https://ourworldindata.org/grapher/lgbt-rights-index?time=2012&region=Europe The index captures to which extent LGBT+ people have the same rights as straight and cisgender people. It combines 18 individual policies, such as the legality of same-sex relationships, marriage, and gender marker changes. Higher values indicate more rights, negative values regressive policies progressive policies receiving a positive score and regressive policies receiving a negative score: -5 to +13. Among the progressive policies are: Same-sex sexual acts Legal, Equal Age of Consent, Employment Discrimination, Hate Crime Protections, Incitement to Hatred, Civil Unions, Marriage Equality, oint Adoptions, Gender Marker Change, LGB Military, Transgender Military, Ban on Conversion Therapies, and Ban on Gender Assignment Surgeries on Children
+Because there arent so many variables for legal framework, we included the lgtb-rights index-data. The Data is from: https://ourworldindata.org/grapher/lgbt-rights-index?time=2012&region=Europe The index captures to which extent LGBT+ people have the same rights as straight and cisgender people. It combines 18 individual policies, such as the legality of same-sex relationships, marriage, and gender marker changes. Higher values indicate more rights, negative values regressive policies progressive policies receiving a positive score and regressive policies receiving a negative score: -5 to +13. Among the progressive policies are: Same-sex sexual acts Legal, Equal Age of Consent, Employment Discrimination, Hate Crime Protections, Incitement to Hatred, Civil Unions, Marriage Equality, oint Adoptions, Gender Marker Change, LGB Military, Transgender Military, Ban on Conversion Therapies, and Ban on Gender Assignment Surgeries on Children
 
 ```{r}
 lgbt_index <- read.csv("lgbt-rights-index.csv")
@@ -288,6 +270,7 @@ ggplot(merged_data, aes(x = region, y = LGBT..Policy.Index, fill = region)) +
 ```
 
 Western Europe has the highest LGBT index, with a high median and a relatively small range. Northern Europe shows a large variance, with some countries having very high values and others in the middle. Southern Europe is lower overall than Northern and Western Europe, with a wide range of values. Eastern Europe has the lowest values, with a median of around 5 and lower protection rights for LGBT people.
+
 ```{r}
 anova_result <- aov(LGBT..Policy.Index ~ region, data = merged_data)
 summary(anova_result)
@@ -304,7 +287,7 @@ cor_data <- merged_data %>%
 
 cor_matrix <- cor(cor_data, use = "pairwise.complete.obs")
 
-print(cor_matrix)
+cor_matrix
 
 ggcorrplot(cor_matrix, method = "circle", type = "lower",
            lab = TRUE, lab_size = 4, colors = c("red", "white", "blue"),
@@ -322,32 +305,18 @@ summary(lm_model)
 
 ```
 
-The results show that approval of LGBT rights is strongly associated with a higher LGBT Policy Index.
-the strongest negative effects come from rejection of “marriage for all” (-1.76 points) and same-sex relationships (-0.94 points).
-neutral answers (“don't know”) are often as negative as rejection - uncertainty is therefore a strong signal for less legal protection of LGBT+ rights.
-the transgender-specific questions (qc19, qc20) are also significant, but with somewhat weaker effects than LGB rights.
-the model is significant, but only explains approx. 26.5% of the variance - other factors also play a role.
-
-
+The results show that approval of LGBT rights is strongly associated with a higher LGBT Policy Index. the strongest negative effects come from rejection of “marriage for all” (-1.76 points) and same-sex relationships (-0.94 points). neutral answers (“don't know”) are often as negative as rejection - uncertainty is therefore a strong signal for less legal protection of LGBT+ rights. the transgender-specific questions (qc19, qc20) are also significant, but with somewhat weaker effects than LGB rights. the model is significant, but only explains approx. 26.5% of the variance - other factors also play a role.
 
 ```{r}
 # interaction model
-
 lm_model_interact <- lm(LGBT..Policy.Index ~ qc19 * region + qc20 * region, data = merged_data)
 
 summary(lm_model_interact)
 
 ```
-In principle, the effects of qc19 and qc20 are relatively low in Eastern Europe, but uncertainty (“I don't know”) leads to stronger negative effects than rejection.
-regionNorthern Europe = +3.17* Northern Europe has on average 3.17 points higher LGBT rights than Eastern Europe.	
-regionSouthern Europe = +3.23* Southern Europe has on average 3.23 points higher LGBT rights than Eastern Europe.	
-regionWestern Europe = +4.19* Western Europe has on average 4.19 points higher LGBT rights than Eastern Europe.
-Western Europe is the most progressive, followed by Southern Europe and Northern Europe, while Eastern Europe has the lowest index as a reference category.
 
- In Northern & Southern Europe, disagreement with qc19 is strongly associated with lower LGBT rights - much more so than in Eastern Europe or Western Europe.
- In Western Europe, approval or disapproval of qc19 is not as important for the LGBT Policy Index, which means that other factors are more decisive there.
- In Northern Europe, rejection or uncertainty about a third option is associated with lower LGBT rights.
-In Southern Europe, uncertainty about qc20 has the opposite effect - there the discussion about the topic could be a sign of progress.
-In Western Europe, these issues hardly play a role in the LGBT index, as legal protection is high anyway.
-R² = 0.4341 43.4% of the variance in the LGBT Policy Index is explained by the model.
-p-value < 2.2e-16 The model is highly significant.The new model explains 17% more variance, i.e. taking the region into account makes the model significantly better.
+In principle, the effects of qc19 and qc20 are relatively low in Eastern Europe, but uncertainty (“I don't know”) leads to stronger negative effects than rejection. regionNorthern Europe = +3.17\* Northern Europe has on average 3.17 points higher LGBT rights than Eastern Europe.\
+regionSouthern Europe = +3.23\* Southern Europe has on average 3.23 points higher LGBT rights than Eastern Europe.\
+regionWestern Europe = +4.19\* Western Europe has on average 4.19 points higher LGBT rights than Eastern Europe. Western Europe is the most progressive, followed by Southern Europe and Northern Europe, while Eastern Europe has the lowest index as a reference category.
+
+In Northern & Southern Europe, disagreement with qc19 is strongly associated with lower LGBT rights - much more so than in Eastern Europe or Western Europe. In Western Europe, approval or disapproval of qc19 is not as important for the LGBT Policy Index, which means that other factors are more decisive there. In Northern Europe, rejection or uncertainty about a third option is associated with lower LGBT rights. In Southern Europe, uncertainty about qc20 has the opposite effect - there the discussion about the topic could be a sign of progress. In Western Europe, these issues hardly play a role in the LGBT index, as legal protection is high anyway. R² = 0.4341 43.4% of the variance in the LGBT Policy Index is explained by the model. p-value \< 2.2e-16 The model is highly significant.The new model explains 17% more variance, i.e. taking the region into account makes the model significantly better.

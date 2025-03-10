@@ -1,0 +1,552 @@
+---
+title: "Gur_Survey_II"
+output: html_document
+date: "2025-03-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(stringr) 
+library(lubridate)
+library(corrr)
+library(ggplot2)
+library(ggcorrplot)
+library(tidyr)
+library(scales)
+```
+
+Data:
+
+```{r}
+#| echo: false
+data <- read_dta("ZA7575.dta")
+```
+
+```{r}
+#| echo: false
+summary(data)
+head(data)
+
+
+column_info <- data.frame(
+  column_name = colnames(data),
+  column_label = sapply(data, function(x) attr(x, "label"))
+)
+
+column_info
+
+data <- data %>%
+  mutate(country_name = case_when(
+    q1_1  == 1 ~ "Belgium",
+    q1_2  == 1 ~ "Denmark",
+    q1_3  == 1 ~ "Germany",
+    q1_4  == 1 ~ "Greece",
+    q1_5  == 1 ~ "Spain",
+    q1_6  == 1 ~ "France",
+    q1_7  == 1 ~ "Ireland",
+    q1_8  == 1 ~ "Italy",
+    q1_9  == 1 ~ "Luxembourg",
+    q1_10 == 1 ~ "Netherlands",
+    q1_11 == 1 ~ "Portugal",
+    q1_12 == 1 ~ "United Kingdom",
+    q1_13 == 1 ~ "Austria",
+    q1_14 == 1 ~ "Sweden",
+    q1_15 == 1 ~ "Finland",
+    q1_16 == 1 ~ "Cyprus",
+    q1_17 == 1 ~ "Czech Republic",
+    q1_18 == 1 ~ "Estonia",
+    q1_19 == 1 ~ "Hungary",
+    q1_20 == 1 ~ "Latvia",
+    q1_21 == 1 ~ "Lithuania",
+    q1_22 == 1 ~ "Malta",
+    q1_23 == 1 ~ "Poland",
+    q1_24 == 1 ~ "Slovakia",
+    q1_25 == 1 ~ "Slovenia",
+    q1_26 == 1 ~ "Bulgaria",
+    q1_27 == 1 ~ "Romania",
+    q1_28 == 1 ~ "Croatia",
+    q1_29 == 1 ~ "Other countries",
+    q1_30 == 1 ~ "DK",
+    TRUE ~ NA_character_  
+  ))
+
+
+
+
+```
+
+
+```{r}
+library(httr)
+library(dplyr)
+library(rvest)
+library(lubridate)
+library(tidyr)
+library(ggplot2)
+```
+
+to see the correlation between two numeric variables: notice that they are from two different datasets. it’s adjustable
+
+cor(pca_data\$Attendance, pca_data_target\$Home_goal_diff, use = "complete.obs")
+
+**Cultural Norms**
+  
+  ```{r}
+
+```
+
+### History
+
+#### Accession Date
+
+The accession date to the European Union might be used as a proxy for democratic practices and culture. To assess this, we will use our first external data for this part. Let's get the accession dates for all European Union member countries.
+
+```{r}
+
+eu_accession <- "https://en.wikipedia.org/wiki/Member_state_of_the_European_Union"
+eu_accession_table <- 
+  eu_accession %>% 
+  read_html() %>% 
+  html_elements("table") %>% 
+  html_table(fill = TRUE) %>% 
+  .[[2]]
+
+# Clean column names
+colnames(eu_accession_table) <- make.names(colnames(eu_accession_table))
+
+# Preview
+head(eu_accession_table)
+```
+
+Unfortunately, dates are characters and they contain written versions of the months. To fix this:
+
+```{r}
+# Clean and convert 'Accession' column to Date format
+eu_accession_table <- eu_accession_table %>%
+  mutate(Accession = gsub("\\s*Founder.*", "", Accession),  # Remove extra text
+         Accession = dmy(Accession))  # Convert to Date format (Day-Month-Year)
+
+# to make sure they are dates now
+str(eu_accession_table$Accession)
+
+# Let's put the foundation date of the EU for founding countries
+eu_accession_table$Accession[is.na(eu_accession_table$Accession)] <- as.Date("1957-03-25")
+
+# Let's get rid of the silly brackets next to country names too
+
+eu_accession_table$Country <- gsub("\\[.*?\\]", "", eu_accession_table$Country)
+
+print(eu_accession_table$Country)
+
+eu_accession_table <-
+  eu_accession_table |> 
+  select(Country, ISO, Accession) |> 
+  rename(country_name = Country)
+
+save(eu_accession_table, file = "eu_accession_table.rda")
+```
+
+#### Form of governments
+
+For descriptive analysis, we want to check if there is a pattern for the support of LGBT rights on the basis of government form.
+
+```{r}
+eu_gov_styles <- "https://en.wikipedia.org/wiki/List_of_European_Union_member_states_by_political_system"
+eu_gov_styles_table <- 
+  eu_gov_styles %>% 
+  read_html() %>% 
+  html_elements("table") %>% 
+  html_table(fill = TRUE) %>% 
+  .[[2]]
+
+# keeping only the necessary columns 
+
+eu_gov_styles_table <-
+  eu_gov_styles_table |> 
+  select(State, Government, 'Monarchy/Republic') |> 
+  rename(country_name = State) |> 
+  mutate(country_name = ifelse(country_name == "Czech Republic", "Czechia", country_name))
+
+save(eu_gov_styles_table, file = "eu_gov_styles_table.rda")
+```
+
+#### Former socialist - Western bloc
+
+Even more interestingly, we want to check how does the level of LGBT support vary across former socialist states and western bloc states.
+
+This will be done manually because we were not able to find a single table indicating historical ideology data across all European countries. We were able to find the list of former socialist EU countries however the table was way too untidy. We then decided to take advantage of low number of countries and do it manually so that we will not lose this information.
+
+The case of Germany is tricky, so we decided to evaluate it as a unique occurrence.
+
+For the former socialist states, see: https://en.wikipedia.org/wiki/List_of_socialist_states
+
+Bulgaria, Czechoslovakia (Now Czechia and Slovakia), Hungary, Poland, Romania, some former Soviet Union (for our case Lithuania, Latvia, and Estonia) states, and some former Yugoslavia (Slovenia, Croatia) states are the ones that used to be ruled under socialism and then joined the EU.
+
+```{r}
+# socialist bloc - now EU countries
+socialist_bloc <- c("Bulgaria", "Croatia", "Czechia", "Estonia", "Hungary", 
+                    "Latvia", "Lithuania", "Poland", "Romania", "Slovakia", "Slovenia")
+
+# western bloc - now EU countries
+western_bloc <- c("Austria", "Belgium", "Cyprus", "Denmark", "Finland", 
+                  "France", "Greece", "Ireland", "Italy", "Luxembourg", 
+                  "Malta", "Netherlands", "Portugal", "Spain", "Sweden", "United Kingdom") # adding the UK because it was a member at the time of survey
+
+
+
+mixed_bloc <- c("Germany") # putting Germany into mixed for obvious reasons
+
+countries <- c(socialist_bloc, western_bloc, mixed_bloc)
+blocs <- c(rep("Socialist", length(socialist_bloc)), rep("Western", length(western_bloc)), rep("Mixed", length(mixed_bloc)))
+
+eu_blocs <- data.frame(Country = countries, Bloc = blocs)
+print(eu_blocs)
+
+eu_blocs$Bloc_binary <- ifelse(eu_blocs$Bloc == "Socialist", 0, 1)
+
+# to match the country_name column for joining tables later
+
+eu_blocs <-
+  eu_blocs |> 
+  rename(country_name = Country)
+
+# to match the name of Czechia for all tables
+
+data <- data |> 
+  mutate(country_name = ifelse(country_name == "Czech Republic", "Czechia", country_name))
+
+save(data, file = "data.rda")
+save(eu_blocs, file = "eu_blocs.rda")
+```
+
+#### Variables and some adjusting
+
+```{r}
+
+load("data.rda")
+load("eu_blocs.rda")
+load("eu_gov_styles_table.rda")
+load("eu_accession_table.rda")
+
+culture_hist_data <- data |> 
+  select(
+    country_name,
+    d11r3,              # Age recoded with 7 categories
+    sd3,                # Religious affiliation
+    gen3,               # Gen before 1946
+    gen4,               # Gen 1946-1964
+    gen5,               # Gen 1965-1980
+    gen6,               # Gen after 1980
+    d10,                # Gender of the respondent
+    qc19,               # The main question of the assignment
+    sd1_7,              # Personal contact with a transgender person irl
+    qc2t_3,             # experienced discriminiation irl, summed for all LGBT
+    qc4t_3,             # job candidate disadvantage, summed for all LGBT 
+    d1r2,               # political ideology of the respondent, cat 5
+    qc6_2,              # would you like an elected politician to be homosexual
+    qc6_2r,             # would you like an elected politician to be homosexual, rec
+    qc6_10,             # would you like an elected politician to be transgender
+    qc6_10r             # would you like an elected politician to be transgender, rec
+  )
+
+```
+
+Let's factor the country name variable for future use
+
+```{r}
+
+culture_hist_data$country_name <- factor(culture_hist_data$country_name)
+```
+
+Throughout this part, we will try and make sense of attitudes towards LGBT community by making distinctions on the basis of political & historical characteristics of EU member countries. First, let's join our three external tables for this part.
+
+-   European member countries by their allegiance to socialist or western bloc in the past
+-   European member countries by the date they joined the Union
+-   European member countries by the forms of government
+
+```{r}
+merged_cult_hist <- culture_hist_data |> 
+  left_join(eu_blocs, by = "country_name") |> 
+  left_join(eu_gov_styles_table, by = "country_name") |> 
+  left_join(eu_accession_table, by = "country_name")
+
+save(merged_cult_hist, file = "merged_cult_hist.rda")
+```
+
+Before actually proceeding to visualisations and explanatory analysis, let's see if we have any NA values across our table.
+
+```{r}
+colSums(is.na(merged_cult_hist))
+
+```
+
+Apparently we do have missing values. After careful investigation, we realised that one country is causing missing values after merging with external tables.
+
+United Kingdom: Due to Brexit. The external data that shows information for the EU member states are updated and excluded the UK.
+
+After a little manual adjustment we will be set to go.
+
+Consequent to following below code, we end up having a complete dataset.
+
+```{r}
+
+# This will fill in the Accession and government form columns for the UK
+
+merged_cult_hist <- merged_cult_hist |> 
+  mutate(
+    Accession = case_when(
+      country_name == "United Kingdom" ~ as.Date("1973-01-01"),
+      TRUE ~ Accession
+    ),
+    `Monarchy/Republic` = case_when(
+      country_name == "United Kingdom" ~ "constitutional monarchy",
+      TRUE ~ `Monarchy/Republic`
+    )
+  )
+
+merged_cult_hist <- merged_cult_hist |> 
+  select(-Government, -ISO)
+save(merged_cult_hist, file = "merged_cult_hist.rda")
+```
+
+#### Gender
+
+```{r}
+# first, I want to recode gender variable for best practice
+# the documentation of the questionnaire tells us that 1 = Man, 2 = Woman
+# to follow the best practices, we will do woman = 0 and man = 1
+
+merged_cult_hist <- merged_cult_hist |> 
+  mutate(
+    d10 = case_when(
+      as.character(d10) == "1" ~ "1",
+      as.character(d10) == "2" ~ "0",
+      TRUE ~ as.character(d10)
+    ),
+    d10 = as.numeric(d10)
+  )
+```
+
+Now let's plot the relationship between gender and support for LGBT documentation rights.
+
+Yielded results indicate that women are slightly more supportive of documentation rights of LGBT communities than men. Rejecting those rights is more common amongst men compared to women, and the response "Don't know" is more frequently seen amongst women than men.
+
+```{r}
+
+summary_df <- merged_cult_hist |> 
+  group_by(d10, qc19) |> 
+  summarise(Count = n()) |> 
+  group_by(d10) |> 
+  mutate(Percentage = Count / sum(Count) * 100) |> 
+  ungroup() |> 
+  mutate(qc19 = factor(qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "Don't know")),
+         d10 = factor(d10, levels = c(1, 0), labels = c("Men", "Women")))
+
+# visualizing
+
+ggplot(summary_df, aes(x = qc19, y = Percentage, fill = d10)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), 
+            position = position_dodge(width = 0.9), vjust = -0.5) +
+  scale_fill_manual(values = c("Men" = "#a0d6b3", "Women" = "#e6886f")) +
+  labs(title = "Support for LGBT Documentation Rights",
+       x = "", y = "Percentage", fill = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 12, hjust = 0.5))
+```
+
+#### Generations
+
+Another useful insight that we can draw from the survey data is the levels of generational support and rejection of LGBT rights relating to identification issues. The barplot below expectedly reveals that the greatest support for the issue comes from the generation that was born after 1980. Gradually decreasing backwards, the lowest support level is posted by before 1946 generation.
+
+Rejection, on the other hand, shows a quite homogenous distribution amongst all generations. However, the greatest rejection is demonstrated by the generation before 1946, whereas the lowest rejection percentage belongs to after-1980 generation.
+
+With around 20 per cent, before-1946 generation expressed with the highest percentage that they do not know about the topic, which could be viewed as an expected outcome.
+
+```{r}
+
+# before plotting, let's summarize each generation and create percentages for support/rejection levels
+
+gen_summary <- rbind(
+  merged_cult_hist |> 
+    filter(gen3 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "Before 1946", Percentage = Count / sum(Count) * 100),
+  merged_cult_hist |> 
+    filter(gen4 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "1946-1964", Percentage = Count / sum(Count) * 100),
+  merged_cult_hist |> 
+    filter(gen5 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "1965-1980", Percentage = Count / sum(Count) * 100),
+  merged_cult_hist |> 
+    filter(gen6 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "After 1980", Percentage = Count / sum(Count) * 100)
+) |> 
+  mutate(qc19 = factor(qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "DK")),
+         Generation = factor(Generation, levels = c("Before 1946", "1946-1964", "1965-1980", "After 1980")))
+
+# visualizing
+
+ggplot(gen_summary, aes(x = qc19, y = Percentage, fill = Generation)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), 
+            position = position_dodge(width = 0.9), vjust = -1, size = 3) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "LGBT Documentation Rights - Generation", x = "", y = "Support percentage", fill = "Generation") +
+  theme_minimal()
+
+```
+
+#### Political ideology - individual
+
+##### Support for LGBT documents to be changed - Political ideology:
+
+Self political report gives us hints about the distribution of LGBT support across different groups in the society, therefore signaling the political culture within the EU. According to the below plot, most supportive groups are those who identify themselves to be far and moderately left, with the moderate left leading. These groups are tightly followed by centrists, whereas the least support and strongest rejection are seen in the far right groups. Amongst those who do not want to reveal their political affiliation, support level is similar to far right. This group could be interesting for making further investigation and comments.
+
+```{r}
+# Summarizing the data to plot 
+summary_df <- merged_cult_hist |> 
+  group_by(d1r2, qc19) |> 
+  summarise(Count = n()) |> 
+  group_by(d1r2) |> 
+  mutate(Percentage = Count / sum(Count) * 100) |> 
+  ungroup() |> 
+  mutate(d1r2 = factor(d1r2, levels = c(1, 2, 3, 4, 5, 9),
+                       labels = c("(1-2) Left", "(3-4)", "(5-6) Centre", "(7-8)", "(9-10) Right", "DK/Refusal")),
+         qc19 = factor(qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "DK")))
+
+
+# let's create a stacked bar plot
+
+ggplot(summary_df, aes(x = d1r2, y = Percentage, fill = qc19)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Yes" = "#4B87F0", "No" = "lightblue", "DK" = "#FF6B6B")) +
+  labs(title = "QC19 Responses by Political Placement",
+       x = "Political Placement", y = "Percentage", fill = "Response") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+##### Support for LGBT documents to be changed - Political ideology (by genders)
+
+The following plot shows the same results but by gender. Results do not show any different implications than the previous one.
+
+```{r}
+# first, summarizing the data to plot
+summary_df <- merged_cult_hist |> 
+  group_by(d1r2, qc19, d10) |> 
+  summarise(Count = n()) |> 
+  group_by(d1r2, d10) |> 
+  mutate(Percentage = Count / sum(Count) * 100) |> 
+  ungroup() |> 
+  mutate(d1r2 = factor(d1r2, levels = c(1, 2, 3, 4, 5, 9),
+                       labels = c("(1-2) Left", "(3-4)", "(5-6) Centre", "(7-8)", "(9-10) Right", "DK/Refusal")),
+         qc19 = factor(qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "DK")),
+         d10 = factor(d10, levels = c(1, 0), labels = c("Men", "Women")))
+
+# let's create a stacked bar plot
+
+ggplot(summary_df, aes(x = d1r2, y = Percentage, fill = qc19)) +
+  geom_bar(stat = "identity") +  
+  facet_wrap(~d10, nrow = 1) +
+  scale_fill_manual(values = c("Yes" = "lightblue", "No" = "#D6A8E6", "DK" = "#B0BEC5")) +
+  labs(title = "QC19 Responses by Self Political Placement, Split by Gender",
+       x = "Political Placement", y = "Percentage", fill = "Response") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+#### Religiousity
+
+Religious affilition could be considered to shape people's opinions on LGBT communities, as religions often have strong opinions regarding those issues. That is why we wanted to see how support for LGBT ID change varies across different religious affiliations.
+
+Orthodox Christians and Muslims are immediately caught by the eye in that they post the lowest proportion of support for the question at hand. They are closely followed by Catholic Christians and Hindus.
+
+Non-believers, Atheists, and Protestans show considerable support.
+
+Sikhs, finally, is the group that is most supportive of LGBT documentation rights.
+
+Findings from this plot are in line with the findings of historical data where we plotted past affiliation with socialism. Majority of previously-socialist countries are known to have a big proportion of Orthodox population.
+
+```{r}
+
+# Recoding all Muslim categories since. They are a minority and summing them up could be better
+
+summary_df <- merged_cult_hist |> 
+  mutate(sd3_recode = case_when(
+    sd3 %in% c(6, 7, 8) ~ 7,  #  sunni, shia, and other into one muslim level
+    TRUE ~ sd3
+  )) %>%
+  group_by(sd3_recode, qc19) |> 
+  summarise(Count = n()) |> 
+  group_by(sd3_recode) |> 
+  mutate(Percentage = Count / sum(Count) * 100) |> 
+  ungroup() |> 
+  mutate(sd3_recode = factor(sd3_recode, levels = c(1, 2, 3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15, 16),
+                             labels = c("Catholic", "Orthodox Christian", "Protestant", "Other Christian", "Jewish", "Muslim", "Sikh", "Buddhist", "Hindu", "Atheist", "Non-believer/Agnostic", "Other", "Refusal", "DK")),
+         qc19 = factor(qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "DK")))
+
+# plotting
+ggplot(summary_df, aes(x = sd3_recode, y = Percentage, fill = qc19)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Yes" = "#a0d6b3", "No" = "#e6886f", "DK" = "#B0BEC5")) +
+  labs(title = "QC19 Responses by Religion/Beliefs",
+       x = "Religion/Beliefs", y = "Percentage", fill = "Response") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+#### Political history - Socialist vs Western
+
+In this part, we will visualize the support for LGBT people to be able to change their IDs by political history of all EU member states. The 'socialist' vs 'western' or 'democratic' distinction has its roots in the Cold War era which made its mark to the 20th century.
+
+Results show that there is a clear distinction between countries from each legacy. The socialist bloc demonstrates a rejection of such right for LGBT people with slight majority. However, there is a considerable support as well.
+
+Western-affiliated countries, on the other hand, are highly supportive of LGBT documentation rights with a clear majority. With a rejection proportion around one-third of approval, there is a considerable rejection as well.
+
+'Mixed' label represents Germany due to the division of the country by socialist and western administrations. We wanted to visualize it separately for obvious reasons. In Germany, support for LGBT ID change overrides other two options with a decisive majority. This is expected considering the commitment of the country to democratic values and practices through the years.
+
+```{r}
+
+summary_df <- as.data.frame(table(merged_cult_hist$qc19, merged_cult_hist$Bloc))
+colnames(summary_df) <- c("qc19", "Bloc", "Count")
+
+# mapping the target variable to labels
+summary_df$qc19_label <- factor(summary_df$qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "DK"))
+
+# plotting
+
+ggplot(summary_df, aes(x = Bloc, y = Count, fill = qc19_label)) +
+  geom_bar(stat = "identity", color = "black", size = 0.5) +
+  scale_fill_manual(values = c("Yes" = "#a1d99b", "No" = "#F44336", "DK" = "#B0BEC5")) +
+  labs(title = "Transgender Document Change Support-Historical Bloc", x = "Bloc", y = "Count", fill = "Response") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.title.position = "top",
+        legend.position = "top",
+        legend.key.size = unit(0.3, "cm"),
+        panel.grid.major.x = element_blank())
+
+# to see the precise numbers
+
+merged_cult_hist |> 
+  group_by(Bloc, qc19) |> 
+  summarise(Count = n()) |> 
+  mutate(qc19 = factor(qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "DK"))) |> 
+  print()
+```
