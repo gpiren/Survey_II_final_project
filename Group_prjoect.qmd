@@ -353,19 +353,16 @@ summary(merged_data)
 ```
 
 ```{r}
+
 final_data_soph <- merged_data %>%
   select(id,
    qc20, qc15_1, qc15_2, qc15_3, qc4_7, qc4_8, qc5_3, country_name, LGBT..Policy.Index, region, value
   )
 
-
-summary(final_data_soph)
+final_data_soph <- final_data_soph |> 
+  mutate(id = as.integer(id))
 
 save(final_data_soph, file = "final_data_soph.rda")
-
-macro_data <- merged_data %>%
-  select(id, country_name, LGBT..Policy.Index, region, value
-  )
 
 sum(is.na(final_data_soph))
 
