@@ -21,6 +21,11 @@ library(tidyr)
 library(scales)
 library(mice)
 library(readxl)
+library(leaflet)
+library(sf)
+library(RColorBrewer)
+library(rnaturalearth)
+library(rnaturalearthdata)
 ```
 
 Data:
@@ -115,7 +120,6 @@ legal_framework_data<- legal_framework_data %>%
 
 str(legal_framework_data)
 
-
 desc_stats <- legal_framework_data %>%
   summarise(
     # Binary (0/1: y/n, 3 = idk)
@@ -154,7 +158,6 @@ qc19 (Transgender people should be able to adapt official documents) → 11.95% 
 Country differences:
 
 ```{r}
-
 dk_summary <- legal_framework_data %>%
   group_by(country_name) %>%
   summarise(
@@ -184,6 +187,7 @@ ggplot(dk_summary, aes(x = reorder(country_name, DK_Percentage), y = DK_Percenta
 Transgender Rights in Europe: Which Countries Support Legal Gender Changes?
 
 ```{r}
+legal_framework_data$country_name <- gsub("Czech Republic", "Czechia", legal_framework_data$country_name)
 qc19_summary_sorted <- legal_framework_data %>%
   group_by(country_name) %>%
   mutate(total_responses = n()) %>%  
@@ -229,7 +233,7 @@ str(lgbt_index)
 
 lgbt_index <- lgbt_index |> filter(Year== 2019)
 
-legal_framework_data$country_name <- gsub("Czech Republic", "Czechia", legal_framework_data$country_name)
+
 
 
 merged_data <- legal_framework_data %>%
