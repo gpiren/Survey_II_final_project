@@ -367,6 +367,6 @@ macro_data <- merged_data %>%
   select(id, country_name, LGBT..Policy.Index, region, value
   )
 
- sum(is.na(final_data_soph))
+sum(is.na(final_data_soph))
 
 ```
