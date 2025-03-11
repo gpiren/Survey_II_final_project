@@ -35,13 +35,11 @@ data <- read_dta("ZA7575.dta")
 summary(data)
 head(data)
 
-
 column_info <- data.frame(
   column_name = colnames(data),
   column_label = sapply(data, function(x) attr(x, "label"))
 )
 
-column_info
 
 data <- data %>%
   mutate(country_name = case_when(
@@ -231,8 +229,13 @@ str(lgbt_index)
 
 lgbt_index <- lgbt_index |> filter(Year== 2019)
 
+legal_framework_data$country_name <- gsub("Czech Republic", "Czechia", legal_framework_data$country_name)
+
+
 merged_data <- legal_framework_data %>%
   left_join(lgbt_index, by = c("country_name" = "Entity"))
+
+
 
 ggplot(merged_data, aes(x = LGBT..Policy.Index, y = reorder(country_name, LGBT..Policy.Index), color = LGBT..Policy.Index)) +
   geom_point(size = 4) +
@@ -241,9 +244,6 @@ ggplot(merged_data, aes(x = LGBT..Policy.Index, y = reorder(country_name, LGBT..
        x = "LGBT Policy Index", y = "Country") +
   theme_minimal() +
   theme(axis.text.y = element_text(size = 10, face = "bold"))
-
-
-
 
 
 ```
@@ -342,18 +342,13 @@ hdi_data <- read_excel("hdr-data.xlsx", sheet = 1)
 
 hdi_data <- hdi_data |> filter(year=="2019" & indicatorCode == "hdi")
 
-merged_data
-
 hdi_data <- hdi_data %>%
   rename(country_name = country)
-
 
 merged_data <- merged_data %>%
   left_join(hdi_data, by = "country_name")
 
 summary(merged_data)
-
-
 
 ```
 
@@ -363,10 +358,15 @@ final_data_soph <- merged_data %>%
    qc20, qc15_1, qc15_2, qc15_3, qc4_7, qc4_8, qc5_3, country_name, LGBT..Policy.Index, region, value
   )
 
+
+summary(final_data_soph)
+
 save(final_data_soph, file = "final_data_soph.rda")
 
 macro_data <- merged_data %>%
   select(id, country_name, LGBT..Policy.Index, region, value
   )
+
+ sum(is.na(final_data_soph))
 
 ```
