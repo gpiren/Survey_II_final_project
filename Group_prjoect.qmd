@@ -37,14 +37,11 @@ data <- read_dta("ZA7575.dta")
 
 ```{r}
 #| echo: false
-summary(data)
-head(data)
 
 column_info <- data.frame(
   column_name = colnames(data),
   column_label = sapply(data, function(x) attr(x, "label"))
 )
-
 
 data <- data %>%
   mutate(country_name = case_when(
@@ -81,14 +78,11 @@ data <- data %>%
     TRUE ~ NA_character_  
   ))
 
-
-
-
 data <- data |> 
   mutate(id = 1:nrow(data)) |>  # Create unique respondent_id
   select(id, everything())
 
-
+data$country_name <- gsub("Czech Republic", "Czechia", data$country_name)
 
 ```
 
@@ -117,8 +111,6 @@ legal_framework_data <- data %>%
 legal_framework_data<- legal_framework_data %>%
   mutate(across(everything(), as.factor))
 
-
-str(legal_framework_data)
 
 desc_stats <- legal_framework_data %>%
   summarise(
@@ -174,7 +166,7 @@ ggplot(dk_summary, aes(x = reorder(country_name, DK_Percentage), y = DK_Percenta
                     labels = c("qc19: Transgender documentchange", "qc20: third genderoption")) +
   labs(title = "Don't Know Rate ",
        x = "country", y = "% of dont know answers",
-       fill = "Frage") +
+       fill = "Question") +
   theme_minimal() +
   theme(axis.text.y = element_text(size = 10, face = "bold"))
 
@@ -187,7 +179,7 @@ ggplot(dk_summary, aes(x = reorder(country_name, DK_Percentage), y = DK_Percenta
 Transgender Rights in Europe: Which Countries Support Legal Gender Changes?
 
 ```{r}
-legal_framework_data$country_name <- gsub("Czech Republic", "Czechia", legal_framework_data$country_name)
+
 qc19_summary_sorted <- legal_framework_data %>%
   group_by(country_name) %>%
   mutate(total_responses = n()) %>%  
@@ -229,26 +221,55 @@ Because there arent so many variables for legal framework, we included the lgtb-
 
 ```{r}
 lgbt_index <- read.csv("lgbt-rights-index.csv")
-str(lgbt_index)
 
 lgbt_index <- lgbt_index |> filter(Year== 2019)
 
-
-
-
 merged_data <- legal_framework_data %>%
   left_join(lgbt_index, by = c("country_name" = "Entity"))
+```
 
+Plotting the LGTB-Index for each country in europe
 
+```{r}
+world <- ne_countries(scale = "medium", returnclass = "sf")
 
-ggplot(merged_data, aes(x = LGBT..Policy.Index, y = reorder(country_name, LGBT..Policy.Index), color = LGBT..Policy.Index)) +
-  geom_point(size = 4) +
-  scale_color_gradient(low = "red", high = "blue") +  
-  labs(title = "LGBT Policy Index by Country",
-       x = "LGBT Policy Index", y = "Country") +
-  theme_minimal() +
-  theme(axis.text.y = element_text(size = 10, face = "bold"))
+map_data <- world %>%
+  left_join(merged_data, by = c("name" = "country_name"))
 
+map_data <- map_data %>%
+  filter(!is.na(LGBT..Policy.Index)) %>%
+  group_by(admin) %>%
+  slice(1) %>%  
+  ungroup()
+
+pal <- colorBin(
+  palette = c("red", "orange", "yellow", "green", "blue", "purple"),
+  domain = map_data$LGBT..Policy.Index,
+  bins = 6,
+  na.color = "transparent"
+)
+
+pmap <- leaflet(data = map_data) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~pal(LGBT..Policy.Index),
+    color = "white",
+    weight = 0.5,
+    opacity = 1,
+    fillOpacity = 0.7,
+    highlight = highlightOptions(weight = 2, color = "black", bringToFront = TRUE),
+    label = ~paste0(name, ": ", round(LGBT..Policy.Index, 1)),  # Entfernt das "%"
+    labelOptions = labelOptions(direction = "auto")
+  ) %>%
+  addLegend(
+    pal = pal,
+    values = map_data$LGBT..Policy.Index,
+    position = "topright",
+    title = "LGBT Index",
+    opacity = 1
+  )
+
+pmap
 
 ```
 
@@ -264,7 +285,7 @@ merged_data <- merged_data %>%
                         "United Kingdom", "United Kingdom of Great Britain and Northern Ireland",  
                         "Ireland", "Austria") ~ "Western Europe",
     country_name %in% c("Spain", "Italy", "Portugal", "Greece", "Malta", "Cyprus") ~ "Southern Europe",
-    country_name %in% c("Poland", "Hungary", "Czech Republic", "Slovakia", "Romania", 
+    country_name %in% c("Poland", "Hungary", "Czechia", "Slovakia", "Romania", 
                         "Bulgaria", "Croatia", "Slovenia") ~ "Eastern Europe",
     TRUE ~ "Other"
   ))
@@ -352,7 +373,6 @@ hdi_data <- hdi_data %>%
 merged_data <- merged_data %>%
   left_join(hdi_data, by = "country_name")
 
-summary(merged_data)
 
 ```
 
