@@ -81,7 +81,6 @@ data$country_name <- gsub("Czech Republic", "Czechia", data$country_name)
 
 ```
 
-
 ## External Data
 
 Because there arent so many variables for legal framework, we included the lgtb-rights index-data. The Data is from: https://ourworldindata.org/grapher/lgbt-rights-index?time=2012&region=Europe The index captures to which extent LGBT+ people have the same rights as straight and cisgender people. It combines 18 individual policies, such as the legality of same-sex relationships, marriage, and gender marker changes. Higher values indicate more rights, negative values regressive policies progressive policies receiving a positive score and regressive policies receiving a negative score: -5 to +13. Among the progressive policies are: Same-sex sexual acts Legal, Equal Age of Consent, Employment Discrimination, Hate Crime Protections, Incitement to Hatred, Civil Unions, Marriage Equality, oint Adoptions, Gender Marker Change, LGB Military, Transgender Military, Ban on Conversion Therapies, and Ban on Gender Assignment Surgeries on Children
@@ -99,34 +98,31 @@ data <- data %>%
 
 QC19:Do you think that transgender persons should be able to change their civil documents to match their inner gender identity?(1=yes, 2=no,3=dk) QC20: Do you believe that official documents, like passports and birth certificates, should have a third option, such as X or O (other) beside male (M) and female (F)for those persons who do not identify as female and male? (1=yes, 2=no,3=dk) QC15_1: to what extend to do you agree or disagree with the following statement? Gay, lesbian and bisexual people should have the same rights as heterosexual people (1 2 3 4 5) QC15_2: to what extend to do you agree or disagree with the following statement? here is nothing wrong in a sexual relationship between two persons of the same sex(1 2 3 4 5) QC15_3: to what extend to do you agree or disagree with the following statement? Same sex marriages should be allowed throughout europe (1 2 3 4 5) QC4_7: In (OUR COUNTRY) when a company wants to hire someone and has the choice between two candidates with equal skills and qualifications, which of the following criteria may, in your opinion, put one candidate at a disadvantage? The candidate’s gender or sex (man or woman) QC4_8: In (OUR COUNTRY) when a company wants to hire someone and has the choice between two candidates with equal skills and qualifications, which of the following criteria may, in your opinion, put one candidate at a disadvantage? The candidate’s gender identity (being transgender) QC5_3: in the last 12 month have you done: You have joined an association or campaign that defends people against discrimination? (1=yes, 2=no,3=dk)
 
-
 ```{r}
 #| echo: false
-legal_framework_data <- data %>%
-  select(
-    qc19,        # TRANSGENDER - CHANGE CIVIL DOCUMENTS
-    qc20,        # OFFICIAL DOCUMENTS SHOULD INCLUDE THIRD GENDER OPTION
-    qc15_1,      # LGB STATEMENTS - SAME RIGHTS AS HETEROSEXUAL
-    qc15_2,      # LGB STATEMENTS - NOTHING WRONG WITH SAME SEX RELATIONSHIPS
-    qc15_3,      # LGB STATEMENTS - ALLOW SAME SEX MARRIAGE THROUGHOUT EUROPE
-    qc4_7,       # JOB CANDIDATE DISADVANTAGE: GENDER
-    qc4_8,       # JOB CANDIDATE DISADVANTAGE: GENDER IDENTITY
-    qc5_3,       # ACTIONS AGAINST DISCRIMINATION - JOINED ASSOCIATION/CAMPAIGN
-    country_name,
-    LGBT..Policy.Index
-    
-  )
-
-#convert to factor, for further processing 
-legal_framework_data<- legal_framework_data %>%
-  mutate(across(everything(), as.factor))
+data <- data %>%
+  mutate(across(
+    c(
+      qc19,        # TRANSGENDER - CHANGE CIVIL DOCUMENTS
+      qc20,        # OFFICIAL DOCUMENTS SHOULD INCLUDE THIRD GENDER OPTION
+      qc15_1,      # LGB STATEMENTS - SAME RIGHTS AS HETEROSEXUAL
+      qc15_2,      # LGB STATEMENTS - NOTHING WRONG WITH SAME SEX RELATIONSHIPS
+      qc15_3,      # LGB STATEMENTS - ALLOW SAME SEX MARRIAGE THROUGHOUT EUROPE
+      qc4_7,       # JOB CANDIDATE DISADVANTAGE: GENDER
+      qc4_8,       # JOB CANDIDATE DISADVANTAGE: GENDER IDENTITY
+      qc5_3,       # ACTIONS AGAINST DISCRIMINATION - JOINED ASSOCIATION/CAMPAIGN
+      country_name,
+      LGBT..Policy.Index
+    ),
+    as.factor
+  ))
 
 
 
 ```
 
 ```{r}
-desc_stats <- legal_framework_data %>%
+desc_stats <- data |> 
   summarise(
     # Binary (0/1: y/n, 3 = idk)
     Mean_Binary_qc19 = mean(as.numeric(qc19), na.rm = TRUE),  
@@ -138,7 +134,7 @@ desc_stats <- legal_framework_data %>%
     Mean_Likert_qc15_3 = mean(as.numeric(qc15_3), na.rm = TRUE)
   )
 
-print(desc_stats)
+desc_stats
 
 ```
 
@@ -149,7 +145,7 @@ In comparison, the values for the general equality of LGB people (qc15_1,, qc15_
 Identifiying how much people chooses the third option: "i dont know" in percentage:
 
 ```{r}
-dk_percentage <- legal_framework_data %>%
+dk_percentage <- data |> 
   summarise(
     qc19 = sum(qc19 == 3, na.rm = TRUE) / n() * 100,
     qc20 = sum(qc20 == 3, na.rm = TRUE) / n() * 100
@@ -164,12 +160,12 @@ qc19 (Transgender people should be able to adapt official documents) → 11.95% 
 Country differences:
 
 ```{r}
-dk_summary <- legal_framework_data %>%
-  group_by(country_name) %>%
+dk_summary <- data |> 
+  group_by(country_name) |> 
   summarise(
     DK_qc19 = sum(qc19 == 3, na.rm = TRUE) / n() * 100,
     DK_qc20 = sum(qc20 == 3, na.rm = TRUE) / n() * 100
-  ) %>%
+  ) |> 
   pivot_longer(cols = c(DK_qc19, DK_qc20), names_to = "Question", values_to = "DK_Percentage")
 
 
@@ -193,7 +189,7 @@ ggplot(dk_summary, aes(x = reorder(country_name, DK_Percentage), y = DK_Percenta
 Transgender Rights in Europe: Which Countries Support Legal Gender Changes?
 
 ```{r}
-qc19_summary_sorted <- legal_framework_data %>%
+qc19_summary_sorted <- data %>%
   group_by(country_name) %>%
   mutate(total_responses = n()) %>%  
   group_by(country_name, qc19) %>%
@@ -230,15 +226,13 @@ ggplot(qc19_summary_sorted, aes(x = reorder(country_name, percentage), y = perce
 
 Results: The Netherlands (88%), Spain (76%) and Malta (76%) are the countries with the highest approval ratings.Countries such as Germany (62%), Sweden (62%) and Austria (57%) also show a majority in favor of changing the law, but at a lower level than the frontrunners. In these countries, there appears to be ongoing social debate and differing opinions. Bulgaria (12%), Hungary (14%), Romania (22%) and Slovakia (24%) have the lowest approval ratings.
 
-
 Plotting the LGTB-Index for each country in europe
 
 ```{r}
-
 world <- ne_countries(scale = "medium", returnclass = "sf")
 
 map_data <- world %>%
-  left_join(legal_framework_data, by = c("name" = "country_name"))
+  left_join(data, by = c("name" = "country_name"))
 
 map_data$LGBT..Policy.Index <- as.numeric(as.character(map_data$LGBT..Policy.Index))
 
@@ -284,7 +278,7 @@ Malta has the highest score, well above all other countries. Sweden, Netherlands
 We want to investigate whether there are significant differences in the laws in different parts of Europe. We therefore divided the countries into Eastern, Western, Southern and Northern Europe and compared the LGTB score.
 
 ```{r}
-legal_framework_data <- legal_framework_data %>%
+data <- data %>%
   mutate(region = case_when(
     country_name %in% c("Denmark", "Sweden", "Finland", "Estonia", "Latvia", "Lithuania") ~ "Northern Europe",
     country_name %in% c("Germany", "France", "Netherlands", "Belgium", "Luxembourg", 
@@ -296,10 +290,10 @@ legal_framework_data <- legal_framework_data %>%
     TRUE ~ "Other"
   ))
 
-legal_framework_data <- legal_framework_data %>%
+data <- data %>%
   mutate(LGBT..Policy.Index = as.numeric(as.character(LGBT..Policy.Index)))
 
-ggplot(legal_framework_data, aes(x = region, y = LGBT..Policy.Index, fill = region)) +
+ggplot(data, aes(x = region, y = LGBT..Policy.Index, fill = region)) +
   geom_boxplot() +
   labs(title = "LGBT Policy Index by Region",
        x = "Region", y = "LGBT Policy Index") +
@@ -314,7 +308,7 @@ ggplot(legal_framework_data, aes(x = region, y = LGBT..Policy.Index, fill = regi
 Western Europe has the highest LGBT index, with a high median and a relatively small range. Northern Europe shows a large variance, with some countries having very high values and others in the middle. Southern Europe is lower overall than Northern and Western Europe, with a wide range of values. Eastern Europe has the lowest values, with a median of around 5 and lower protection rights for LGBT people.
 
 ```{r}
-cor_data <- legal_framework_data %>%
+cor_data <-data %>%
   select(qc19, qc20, qc15_1, qc15_2, qc15_3,LGBT..Policy.Index) %>%
   mutate(across(everything(), as.numeric))  
 
@@ -332,7 +326,7 @@ The correlation table highlights interesting connections between societal views 
 
 ```{r}
 
-lm_model <- lm(LGBT..Policy.Index ~ qc19 + qc20 + qc15_1 + qc15_2 + qc15_3, data = legal_framework_data)
+lm_model <- lm(LGBT..Policy.Index ~ qc19 + qc20 + qc15_1 + qc15_2 + qc15_3, data = data)
 
 summary(lm_model)
 
@@ -343,7 +337,7 @@ The results show that approval of LGBT rights is strongly associated with a high
 ```{r}
 # interaction model
 
-lm_model_interact <- lm(LGBT..Policy.Index ~ qc19 * region + qc20 * region, data = legal_framework_data)
+lm_model_interact <- lm(LGBT..Policy.Index ~ qc19 * region + qc20 * region, data = data)
 
 summary(lm_model_interact)
 
