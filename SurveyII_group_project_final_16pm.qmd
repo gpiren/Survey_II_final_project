@@ -1,0 +1,1174 @@
+---
+title: "Survey_II"
+format: html
+editor: visual
+---
+
+## Libraries:
+
+```{r, message=FALSE}
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(stringr) 
+library(lubridate)
+library(corrr)
+library(ggcorrplot)
+library(tidyr)
+library(scales)
+library(mice)
+library(readxl)
+library(leaflet)
+library(sf)
+library(RColorBrewer)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(corrplot)
+library(lme4) 
+library(car)
+library(nnet)
+library(reshape2)
+library(MASS)
+```
+
+Data:
+
+```{r, message=FALSE}
+data <- read_dta("ZA7575.dta")
+```
+
+```{r, echo: TRUE, results = 'hide'}
+column_info <- data.frame(
+  column_name = colnames(data),
+  column_label = sapply(data, function(x) attr(x, "label"))
+)
+
+data <- data %>%
+  mutate(country_name = case_when(
+    q1_1  == 1 ~ "Belgium",
+    q1_2  == 1 ~ "Denmark",
+    q1_3  == 1 ~ "Germany",
+    q1_4  == 1 ~ "Greece",
+    q1_5  == 1 ~ "Spain",
+    q1_6  == 1 ~ "France",
+    q1_7  == 1 ~ "Ireland",
+    q1_8  == 1 ~ "Italy",
+    q1_9  == 1 ~ "Luxembourg",
+    q1_10 == 1 ~ "Netherlands",
+    q1_11 == 1 ~ "Portugal",
+    q1_12 == 1 ~ "United Kingdom",
+    q1_13 == 1 ~ "Austria",
+    q1_14 == 1 ~ "Sweden",
+    q1_15 == 1 ~ "Finland",
+    q1_16 == 1 ~ "Cyprus",
+    q1_17 == 1 ~ "Czech Republic",
+    q1_18 == 1 ~ "Estonia",
+    q1_19 == 1 ~ "Hungary",
+    q1_20 == 1 ~ "Latvia",
+    q1_21 == 1 ~ "Lithuania",
+    q1_22 == 1 ~ "Malta",
+    q1_23 == 1 ~ "Poland",
+    q1_24 == 1 ~ "Slovakia",
+    q1_25 == 1 ~ "Slovenia",
+    q1_26 == 1 ~ "Bulgaria",
+    q1_27 == 1 ~ "Romania",
+    q1_28 == 1 ~ "Croatia",
+    q1_29 == 1 ~ "Other countries",
+    q1_30 == 1 ~ "DK",
+    TRUE ~ NA_character_  
+  ))
+
+data$country_name <- gsub("Czech Republic", "Czechia", data$country_name)
+
+data <- data |> 
+  mutate(
+    qc19 = factor(qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "DK")),
+    d10 = case_when(
+      d10 == 1 ~ 1,  # Man for best practice
+      d10 == 2 ~ 0   # Woman
+    ),
+    d10 = factor(d10, levels = c(0, 1),
+                 labels = c("Woman", "Man"))
+  )
+
+
+```
+
+## General Descriptive Analysis
+
+```{r}
+
+data$country_name <- factor(data$country_name)
+
+na_count <- data |>
+  select(country_name, qc19, d11, d10, sd3, d1r2) |> 
+  summarise(across(everything(), ~ sum(is.na(.))))
+
+print(na_count)
+
+# there are no NAs
+
+
+```
+
+```{r}
+
+n_respondents <- nrow(data) 
+n_countries <- length(unique(data$country_name)) 
+
+cat("Total observations", n_respondents, "\n")
+cat("Total countries", n_countries, "\n")
+
+
+summary(data[, c("d11")]) 
+
+```
+
+The data set includes a total of **27,438 respondents** from **28 European countries**, which provides a representative sample to study attitudes towards supporting trans people in obtaining official documents.Regarding the variable **age (`d11`)**, a wide distribution is observed, with an age range between **15 and 98 years**. The mean age of the respondents is **51.56 years**, indicating that the sample is mostly composed of older adults. In addition, the median age is **53 years**, suggesting that half of the respondents are **53 years or younger**, while the other half are older. The **first quartile (37 years old)** and **third quartile (66 years old)** show that 50% of the sample is in an age range between **37 and 66 years old**, which allows us to analyze generational differences in support for trans rights. The age of respondents is a key factor in this analysis, as attitudes towards LGBTI rights can vary significantly by age group, with younger generations generally showing greater acceptance in previous studies.
+
+```{r}
+
+table_qc19 <- data |> 
+  count(qc19) |> 
+  mutate(percentage = n / sum(n) * 100)
+
+print(table_qc19)
+
+ggplot(data, aes(x = qc19, fill = qc19)) +
+  geom_bar() +
+  labs(title = "Transgender Support Distribution",
+       x = "Support level", y = "Number of answers") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Blues")
+
+```
+
+The survey results regarding support for transgender individuals obtaining official documents (`qc19`) reveal key insights into public opinion. A **majority (52.71%)** of respondents express support for this right, indicating a general positive attitude toward transgender inclusivity in legal documentation. However, **35.33% oppose** the idea, showing that a significant portion of the population still holds reservations or negative views on the issue. Additionally, **11.95% of respondents answered "Don't Know (DK)"**, suggesting a level of uncertainty or lack of awareness regarding the topic.
+
+These results highlight a **clear, but not overwhelming, majority in favor of transgender rights**, which may reflect broader trends in social acceptance and legal progress in different countries. However, the **considerable opposition (over one-third of respondents)** suggests that cultural, political, and religious factors likely play a role in shaping attitudes toward transgender individuals. The presence of nearly **12% undecided respondents** indicates that educational initiatives and policy discussions could influence public opinion further.
+
+```{r}
+table_qc19_gender <- data |> 
+  group_by(d10, qc19) |> 
+  summarise(count = n()) |> 
+  mutate(percentage = count / sum(count) * 100)
+
+print(table_qc19_gender)
+
+ggplot(data, aes(x = qc19, fill = d10)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Support for Transgender People by Gender",
+       x = "Support level", y = "Number of responses", fill = "Gender") +
+  theme_minimal()
+
+```
+
+The data reveals a clear gender-based difference in support for transgender individuals obtaining official documents. On the one hand, 54.64% of women support trans rights, compared to 50.40% of men. Higher support among women may be linked to greater empathy and openness to gender issues, which has been observed in previous research on LGBTQ+ rights. On the other hand, men have a higher opposition rate (38.68%) compared to women (32.53%), indicating that men are more likely to reject transgender rights. Men's higher opposition rates could be influenced by traditional gender norms and conservative social attitudes that are more prevalent among male respondents. Adittionally, the percentage of respondents who are uncertain is slightly higher among women (12.81%) than among men (10.91%).The uncertainty among women suggests that some female respondents may be undecided rather than strictly opposed, indicating a potential opportunity for awareness and education efforts. In conclusion, the results highlight a gender gap in attitudes towards transgender rights, with women being more supportive and men showing more resistance.
+
+We will perform a chi-square test to know if these gender differences are statistically significant or not.
+
+```{r}
+# Contingency table
+data_matrix <- matrix(c(6296, 8167,  # Yes responses
+                        4832, 4863,  # No responses
+                        1364, 1916), # DK responses
+                      nrow = 2, byrow = TRUE)
+
+rownames(data_matrix) <- c("Man", "Woman")
+colnames(data_matrix) <- c("Yes", "No", "DK")
+
+#Chi-square
+chi_square_test <- chisq.test(data_matrix)
+
+print(chi_square_test)
+
+```
+
+Since p-value \< 0.05, we reject the null hypothesis, which means that there is a statistically significant relationship between gender and support for transgender rights. The large X-squared value (2117) suggests that gender plays a strong role in shaping attitudes towards transgender individuals obtaining official documents. This confirms the pattern observed in the descriptive analysis: women are significantly more likely to support transgender rights than men, while men show a higher rate of opposition. So, we could say that the differences in support for transgender rights between men and women are not random, but statistically significant and that women are significantly more supportive, while men show more opposition.
+
+#### Variables and some adjusting
+
+For the particular case of cultural norms and historical background, below are the variables we will be working on:
+
+qc19 - \# The main question of the assignment, support for LGBT legal document rights
+
+sd3 - \# Religious affiliation
+
+gen3 - \# Gen before 1946
+
+gen4 - \# Gen 1946-1964
+
+gen5 - \# Gen 1965-1980
+
+gen6 -# Gen after 1980
+
+d10 - \# Gender of the respondent
+
+qc2t_3 - \# experienced discriminiation in real life (summed for all LGBT)
+
+d1r2 - \# political ideology of the respondent, (5 categories)
+
+### Historical Background
+
+Throughout this part, we will try and make sense of attitudes towards LGBT community by making distinctions on the basis of political & historical characteristics of EU member countries. First, let's join our external table for this part.
+
+-   European member countries by their allegiance to socialist or western bloc in the past
+
+#### Former socialist - Western bloc
+
+We want to check how does the level of LGBT support vary across former socialist states and western bloc states.
+
+This will be done through a quick data frame creation.
+
+We looked into former socialist countries that are a part of the EU at the moment. For the former socialist states, see:
+
+<https://en.wikipedia.org/wiki/List_of_socialist_states>
+
+Czechia, Slovakia, Bulgaria, Hungary, Poland, Romania, some former Soviet Union (for our case Lithuania, Latvia, and Estonia) states, and some former Yugoslavia (Slovenia, Croatia) states are the ones that used to be ruled under socialism and then joined the EU.
+
+Then, we took advantage of the low number of countries and filled the rest of the data frame manually and acquired the full EU member state list by former political ideology.
+
+```{r}
+# socialist bloc - now EU countries
+socialist_bloc <- c("Bulgaria", "Croatia", "Czechia", "Estonia", "Hungary", 
+                    "Latvia", "Lithuania", "Poland", "Romania", "Slovakia", "Slovenia")
+
+# western bloc - now EU countries
+western_bloc <- c("Austria", "Belgium", "Cyprus", "Denmark", "Finland", 
+                  "France", "Greece", "Ireland", "Italy", "Luxembourg", 
+                  "Malta", "Netherlands", "Portugal", "Spain", "Sweden", "United Kingdom") # adding the UK because it was a member at the time of survey
+
+
+mixed_bloc <- c("Germany") # putting Germany into mixed for obvious reasons
+
+countries <- c(socialist_bloc, western_bloc, mixed_bloc)
+blocs <- c(rep("Socialist", length(socialist_bloc)), rep("Western", length(western_bloc)), rep("Mixed", length(mixed_bloc)))
+
+eu_blocs <- data.frame(Country = countries, Bloc = blocs)
+print(eu_blocs)
+
+eu_blocs$Bloc_binary <- ifelse(eu_blocs$Bloc == "Socialist", 0, 1)
+
+# to match the country_name column for joining tables later
+
+eu_blocs <-
+  eu_blocs |> 
+  rename(country_name = Country)
+
+
+save(eu_blocs, file = "eu_blocs.rda")
+
+
+```
+
+Before actually proceeding to visualizations and explanatory analysis, let's see if we have any NA values across our table. Let's join our tables first.
+
+```{r}
+data <- data |> 
+  left_join(eu_blocs, by = "country_name")
+
+```
+
+Now let's check for NAs.
+
+```{r}
+colSums(is.na(eu_blocs))
+```
+
+#### Visualization - Historical backgrounds
+
+After data preparation, we will visualize the support for LGBT people to be able to change their IDs by political history of all EU member states. The 'socialist' vs 'western' or 'democratic' distinction has its roots in the Cold War era which made its mark to the 20th century.
+
+Results show that there is a clear distinction between countries from each legacy. The socialist bloc demonstrates a rejection of such right for LGBT people with slight majority. However, there is a considerable support as well.
+
+Western-affiliated countries, on the other hand, are highly supportive of LGBT documentation rights with a clear majority. With a rejection proportion around one-third of approval, there is a considerable rejection as well.
+
+'Mixed' label represents Germany due to the division of the country by socialist and western rules. We wanted to visualize it separately for obvious reasons. In Germany, support for LGBT ID change overrides other two options with a decisive majority. This is expected considering the commitment of the country to democratic values and practices through the years.
+
+```{r}
+summary_df_pol <- as.data.frame(table(data$qc19, data$Bloc))
+colnames(summary_df_pol) <- c("qc19", "Bloc", "Count")
+
+# Use the existing qc19 values which are "Yes", "No", "DK"
+# No need for levels = c("1", "2", "3") since qc19 is already labeled
+summary_df_pol$qc19_label <- factor(summary_df_pol$qc19, levels = c("Yes", "No", "DK"))
+
+# plotting
+
+ggplot(summary_df_pol, aes(x = Bloc, y = Count, fill = qc19_label)) +
+  geom_bar(stat = "identity", color = "black", size = 0.5) +
+  scale_fill_manual(values = c("Yes" = "#a1d99b", "No" = "#F44336", "DK" = "#B0BEC5")) +
+  labs(title = "Transgender Document Change Support-Historical Bloc", x = "Bloc", y = "Count", fill = "Response") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.title.position = "top",
+        legend.position = "top",
+        legend.key.size = unit(0.3, "cm"),
+        panel.grid.major.x = element_blank())
+
+# to see the precise numbers
+
+data |> 
+  group_by(Bloc, qc19) |> 
+  summarise(Count = n()) |> 
+  print()
+```
+
+### Cultural and Societal Norms
+
+#### Generations
+
+Another useful insight that we can draw from the survey data is the levels of generational support and rejection of LGBT rights relating to identification issues. The barplot below expectedly reveals that the greatest support for the issue comes from the generation that was born after 1980. Gradually decreasing backwards, the lowest support level is posted by before-1946 generation.
+
+Rejection, on the other hand, shows a quite similar distribution across all generations. However, the greatest rejection is demonstrated by the generation before 1946, whereas the lowest rejection percentage belongs to after-1980 generation.
+
+With around 20 per cent, before-1946 generation expressed with the highest percentage that they do not know about the topic, which could be viewed as an expected outcome.
+
+```{r}
+
+# before plotting, let's summarize each generation and create percentages for support/rejection levels
+
+gen_summary <- rbind(
+  data |> 
+    filter(gen3 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "Before 1946", Percentage = Count / sum(Count) * 100),
+  data |> 
+    filter(gen4 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "1946-1964", Percentage = Count / sum(Count) * 100),
+  data |> 
+    filter(gen5 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "1965-1980", Percentage = Count / sum(Count) * 100),
+  data |> 
+    filter(gen6 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "After 1980", Percentage = Count / sum(Count) * 100)
+) |> 
+  mutate(Generation = factor(Generation, levels = c("Before 1946", "1946-1964", "1965-1980", "After 1980")))
+
+# visualizing
+
+ggplot(gen_summary, aes(x = qc19, y = Percentage, fill = Generation)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), 
+            position = position_dodge(width = 0.9), vjust = -1, size = 3) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "LGBT Documentation Rights - Generation", x = "", y = "Support percentage", fill = "Generation") +
+  theme_minimal()
+
+```
+
+#### Religiousity
+
+Religious affilition could be considered to shape people's opinions on LGBT communities, as religions often have strong opinions regarding those issues. That is why we wanted to see how support for LGBT ID change varies across different religious affiliations.
+
+Orthodox Christians and Muslims are immediately caught by the eye in that they post the lowest proportion of support for the question at hand. They are closely followed by Catholic Christians and Hindus.
+
+Non-believers, Atheists, and Protestans show considerable support.
+
+Sikhs, finally, is the group that is most supportive of LGBT documentation rights.
+
+Findings from this plot are in line with the findings of historical data where we plotted past affiliation with socialism. Majority of previously-socialist countries are known to have a big proportion of Orthodox population.
+
+```{r}
+
+# Recoding all Muslim categories since. They are a minority and summing them up could be better
+summary_df_rel <- data |> 
+  mutate(sd3_recode = case_when(
+    sd3 %in% c(6, 7, 8) ~ 7,  #  sunni, shia, and other into one muslim level
+    TRUE ~ sd3
+  )) %>%
+  group_by(sd3_recode, qc19) |> 
+  summarise(Count = n()) |> 
+  group_by(sd3_recode) |> 
+  mutate(Percentage = Count / sum(Count) * 100) |> 
+  ungroup() |> 
+  mutate(sd3_recode = factor(sd3_recode, levels = c(1, 2, 3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15, 16),
+                             labels = c("Catholic", "Orthodox Christian", "Protestant", "Other Christian", "Jewish", "Muslim", "Sikh", "Buddhist", "Hindu", "Atheist", "Non-believer/Agnostic", "Other", "Refusal", "DK")))
+
+# plotting
+ggplot(summary_df_rel, aes(x = sd3_recode, y = Percentage, fill = qc19)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Yes" = "#a0d6b3", "No" = "#e6886f", "DK" = "#B0BEC5")) +
+  labs(title = "QC19 Responses by Religion/Beliefs",
+       x = "Religion/Beliefs", y = "Percentage", fill = "Response") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+#### Final variables - correlations
+
+```{r}
+
+# prepare the data with qc19_numeric. also creating another numeric qc19 for the general use
+data <- data |> 
+  mutate(qc19_numeric = case_when(
+    qc19 == "Yes" ~ 1,  # Yes
+    qc19 == "No" ~ 0,  # No
+    qc19 == "DK" ~ NA_real_  # DK
+  ))
+
+selected_data_cultural <- data |> 
+  mutate(qc19_numeric = case_when(
+    qc19 == "Yes" ~ 1,  # Yes
+    qc19 == "No" ~ 0,  # No
+    qc19 == "DK" ~ NA_real_  # DK
+  )) |> 
+  select(
+    qc19_numeric,
+    sd3,
+    gen3,
+    gen4,
+    gen5,
+    gen6,
+    d10,
+    qc2t_3,
+    d1r2
+  )
+
+# converting categorical variables to numeric for correlation matrix
+selected_data_cultural <- selected_data_cultural |> 
+  mutate(
+    sd3 = as.numeric(as.factor(sd3)),
+    d10 = as.numeric(d10),
+    qc2t_3 = as.numeric(as.factor(qc2t_3)),
+    d1r2 = as.numeric(as.factor(d1r2)),
+    gen3 = as.numeric(gen3),
+    gen4 = as.numeric(gen4),
+    gen5 = as.numeric(gen5),
+    gen6 = as.numeric(gen6)
+  )
+
+# remove rows with NAs
+selected_data_clean_cultural <- selected_data_cultural |> 
+  filter(!is.na(qc19_numeric))
+
+# correlation matrix
+numeric_data_cult_hist <- selected_data_clean_cultural %>% select(where(is.numeric))
+if (nrow(numeric_data_cult_hist) == 0 || ncol(numeric_data_cult_hist) == 0) {
+  stop("No numeric data available for correlation. Check your data and conversions.")
+}
+cor_matrix <- cor(numeric_data_cult_hist, use = "pairwise.complete.obs")
+
+print(cor_matrix)
+corrplot::corrplot(cor_matrix, method = "color",
+                   title = "Correlation Matrix with qc19",
+                   tl.col = "black", tl.srt = 45,
+                   na.label = " ")
+
+```
+
+sd3 (religious affiliation) and gen6 (after-1980) shows positive correlation (in decreasing order)
+
+political ideology (greater numbers indicating more right wing tendencies), d10 (gender) and gen3 (before 1946) are the noticable variables with negative correlation.
+
+Religious affiliation and political ideology seem to be the most important variables from this section.
+
+```{r}
+# save(merged_cult_hist, file = "GUR_DATA.rda")
+```
+
+#### IRANTZU
+
+We will now focus on some societal attitudes.
+
+### IRANTZU DATA
+
+# Societal attitudes toward LGBTI rights
+
+Taking into account what has been previously analyzed, these are the variables necessary to carry out the descriptive analysis based on societal attitudes.
+
+Key Variables Explaining Support for Transgender People (cq19) - cq19: Opinion on whether transgender people should be able to change official documents. - country / country_name: Country code or name of the respondent's country (for country analysis). - d11: Respondent's exact age (key socio-demographic factor). - d10: Gender of the respondent (Male/Female). - qc2_4: Personal experience of discrimination based on sexual orientation. - qc2_6: Personal experience of discrimination for being trans. - qc4_8: Perceived disadvantage in employment due to gender identity.
+
+Variables Measuring Social Attitudes towards LGBTI+ Rights - qc15_1: Opinion on whether LGB people should have the same rights as heterosexuals. - qc15_2: Opinion on whether same-sex relationships are normal. - qc15_3: Opinion on whether same-sex marriage should be allowed in Europe. - qc17_3: Opinion on whether schools should inform about diversity in sexual orientation. - qc17_4: Opinion on whether schools should report on diversity in gender identity. - qc18_2: Opinion on whether two men can show affection in public without a problem. - qc18_3: Opinion on whether two women can show affection in public without a problem. - qc20: Opinion on whether official documents should include a third gender option.
+
+```{r}
+
+# Transform variables into factors with descriptive labels
+data <- data %>%
+  mutate(
+    qc2_4 = factor(qc2_4, levels = c(0,1), labels = c("No", "Yes")),
+    qc2_6 = factor(qc2_6, levels = c(0,1), labels = c("No", "Yes")),
+    qc4_8 = factor(qc4_8, levels = c(0,1), labels = c("No", "Yes")),
+    # 3 level variables
+    qc20 = factor(qc20, levels = c(1,2,3), labels = c("Yes", "No", "DK")),
+    # 5 level variables
+    qc15_1 = factor(qc15_1, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+    qc15_2 = factor(qc15_2, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+    qc15_3 = factor(qc15_3, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+    qc17_3 = factor(qc17_3, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+    qc17_4 = factor(qc17_4, levels = c(1,2,3,4,5),
+                    labels = c("Totally agree", "Tend to agree", "Tend to disagree", "Totally disagree", "DK")),
+    # 6 level variables 
+    qc1_4 = factor(qc1_4, levels = c(1,2,3,4,5,6),
+                   labels = c("Very widespread", "Fairly widespread", "Fairly rare", "Very rare", "Non-existent", "DK")),
+    qc1_8 = factor(qc1_8, levels = c(1,2,3,4,5,6),
+                   labels = c("Very widespread", "Fairly widespread", "Fairly rare", "Very rare", "Non-existent", "DK")),
+    # 12 level variables
+    qc18_2 = factor(qc18_2, levels = c(1,2,3,4,5,6,7,8,9,10,11,12)),
+    qc18_3 = factor(qc18_3, levels = c(1,2,3,4,5,6,7,8,9,10,11,12))
+  )
+
+
+```
+
+###Correlations
+
+We will compute now the correlations between discrimination perceptions and demographic variables.
+
+```{r}
+# Convert categorical variables to numeric 
+data <- data |> 
+  mutate(
+    d10_num = as.numeric(d10),
+    qc1_4_num = as.numeric(qc1_4),
+    qc1_8_num = as.numeric(qc1_8),
+    d11 = as.numeric(d11),
+    d8_num = as.numeric(d8)  
+  )
+
+# Correlation matrix
+cor_matrix <- cor(data[, c("qc1_4_num", "qc1_8_num", "d11", "d10_num", "d8_num")], use = "complete.obs")
+
+print(cor_matrix)
+
+ggcorrplot(cor_matrix, lab = TRUE, colors = c("blue", "white", "red"))
+
+```
+
+The correlation analysis between perceived discrimination and demographic variables provides insightful findings regarding their relationships.They reveal a strong positive correlation (0.64) between perceived discrimination based on sexual orientation and perceived discrimination towards transgender individuals. This suggests that individuals who perceive high levels of discrimination against one group also tend to perceive high levels of discrimination against the other, indicating a shared perception of marginalization across these identities. The correlation between age (**d11**) and perceived discrimination is positive but weak (0.19 with **qc1_4_num** and 0.20 with **qc1_8_num**). This suggests that older individuals tend to report slightly higher levels of perceived discrimination compared to younger individuals, but the effect is not strong. There is a moderate negative correlation between education level (**d8_num**) and perceived discrimination (-0.38 with **d11**, -0.08 with **qc1_8_num**, and -0.07 with **qc1_4_num**). This indicates that individuals with higher levels of education tend to report lower perceptions of discrimination, possibly reflecting a greater awareness of anti-discrimination policies or personal social positioning that mitigates exposure to discrimination. The correlation between gender (**d10_num**) and discrimination perceptions is near zero, suggesting that gender does not significantly influence how individuals perceive discrimination against LGBTQ+ groups in this dataset. The results highlight that perceptions of discrimination towards different LGBTQ+ groups are interconnected, with those who recognize discrimination against one group likely acknowledging it for another. Older individuals report slightly higher discrimination perceptions, while higher educational attainment appears to be associated with lower perceptions of discrimination. Gender does not seem to play a crucial role in shaping discrimination perceptions.
+
+We will continue with some regression models to predict support for transgender individuals obtaining official documents (qc19) based on various demographic and attitudinal factors.
+
+### Regression
+
+First, since qc19 is a categorical variable with three levels (Yes, No, Don't Know), we will use multinomial logistic regression.
+
+```{r}
+# created new binary q19 variable, keeping the original
+data <- data %>%
+  mutate(qc19_binary = factor(ifelse(qc19 == "DK", NA, as.character(qc19)), 
+                               levels = c("Yes", "No")))
+
+model_logistic <- glm(qc19_binary ~ d10 + d11 + d8 + qc1_4 + qc1_8, data = data, family = binomial)
+
+summary(model_logistic)
+exp(coef(model_logistic))
+
+```
+
+The main results of the regression are as follows:
+
+Intercept: The model suggests that when all predictors are at their baseline values, there is a positive baseline odds of the outcome.
+
+d10 (Gender): Being categorized as "Man" is associated with lower odds of the occurrence of the target variable, implying that men may be less likely to support the LGBT legal documentation rights compared to the women.
+
+d11 (Age): Age has a very small negative effect on the odds of the target variable. As age increases, the odds of the outcome decrease slightly, indicating that older individuals may be less likely to support the outcome.
+
+d8 (Age stopped education): The age when education stopped has a positive relationship with the outcome; as the value of d8 increases, the odds of supporting the LGBT rights also increase, suggesting a supportive trend in relation to this variable.
+
+qc1_4 (Thinks there is/not discrimination in country based on sexual orientation):
+
+Positive associations with perceptions of support being "Fairly widespread" and "Fairly rare," indicating that respondents who believe there is support for document changes are more likely to support the outcome.
+
+Negative associations with "Very rare," "Non-existent," and "DK," suggesting that skepticism or lack of opinion decreases the likelihood of support.
+
+qc1_8 (Thinks there is/not discrimination in country based on sexual orientation):
+
+Negative relationships with "Fairly widespread," "Fairly rare," "Very rare," and "Non-existent," indicating that respondents who see low levels of support are less likely to endorse the outcome. Similar to qc1_4, uncertainty ("DK") also correlates with lower odds of support.
+
+Now, we will finish our analysis by performing correlations between some last key variables.
+
+```{r}
+data_numeric <- data %>%
+  mutate(across(where(is.factor), as.numeric))
+
+# Correlation matrix
+cor_matrix <- cor(data_numeric[, c("qc19_binary", "qc1_4", "qc1_8", "qc15_1", "qc15_2", "qc15_3")], use = "pairwise.complete.obs")
+
+print(cor_matrix)
+
+melted_cor <- melt(cor_matrix)
+
+ggplot(melted_cor, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +
+  scale_fill_gradient2(low="red", high="blue", mid="white", midpoint=0) +
+  theme_minimal() +
+  labs(title="Map of Correlations between Key Variables")
+
+```
+
+The correlation analysis among key variables provides valuable insights into the relationships between different perceptions and opinions. The strongest correlations are observed between qc15_1 (LGB rights statement: same rights as heterosexuals) and qc15_2 (LGB rights statement: nothing wrong with same-sex relationships), with a coefficient of 0.765, as well as between qc15_2 and qc15_3 (LGB rights statement: allow same-sex marriage throughout Europe) at 0.817. These high correlations indicate that individuals who support equal rights for LGB individuals also tend to support same-sex marriage and affirm that there is nothing wrong with same-sex relationships. Furthermore, qc1_4 (perceived discrimination based on sexual orientation) and qc1_8 (perceived discrimination based on being transgender) exhibit a moderate correlation of 0.638, suggesting that those who perceive widespread discrimination against individuals based on their sexual orientation also tend to perceive discrimination against transgender individuals. This alignment indicates that public perceptions of discrimination against different marginalized groups are interrelated. The correlations between qc19 (support for a third gender option in official documents) and other variables are weaker but still notable, particularly with qc15_1 (0.408) and qc15_2 (0.414), implying that individuals who favor LGB rights also tend to support the inclusion of a third gender option. However, the correlations are not extremely strong, indicating that while these attitudes are related, they are not entirely dependent on one another. Overall, the analysis suggests that perceptions of discrimination and support for LGBTQ+ rights are interconnected, but with varying degrees of association. The strongest relationships are observed between different aspects of LGB rights, while perceived discrimination and support for transgender rights also show moderate connections. These findings highlight the importance of considering intersectional perspectives when analyzing public attitudes toward discrimination and equality.
+
+## External Data
+
+Because there arent so many variables for legal framework, we included the lgtb-rights index-data. The Data is from: https://ourworldindata.org/grapher/lgbt-rights-index?time=2012&region=Europe The index captures to which extent LGBT+ people have the same rights as straight and cisgender people. It combines 18 individual policies, such as the legality of same-sex relationships, marriage, and gender marker changes. Higher values indicate more rights, negative values regressive policies progressive policies receiving a positive score and regressive policies receiving a negative score: -5 to +13. Among the progressive policies are: Same-sex sexual acts Legal, Equal Age of Consent, Employment Discrimination, Hate Crime Protections, Incitement to Hatred, Civil Unions, Marriage Equality, oint Adoptions, Gender Marker Change, LGB Military, Transgender Military, Ban on Conversion Therapies, and Ban on Gender Assignment Surgeries on Children
+
+```{r}
+lgbt_index <- read.csv("lgbt-rights-index.csv")
+
+lgbt_index <- lgbt_index |> filter(Year== 2019)
+
+data <- data %>%
+  left_join(lgbt_index, by = c("country_name" = "Entity"))
+```
+
+## legal framework
+
+QC19:Do you think that transgender persons should be able to change their civil documents to match their inner gender identity?(1=yes, 2=no,3=dk) QC20: Do you believe that official documents, like passports and birth certificates, should have a third option, such as X or O (other) beside male (M) and female (F)for those persons who do not identify as female and male? (1=yes, 2=no,3=dk) QC15_1: to what extend to do you agree or disagree with the following statement? Gay, lesbian and bisexual people should have the same rights as heterosexual people (1 2 3 4 5) QC15_2: to what extend to do you agree or disagree with the following statement? here is nothing wrong in a sexual relationship between two persons of the same sex(1 2 3 4 5) QC15_3: to what extend to do you agree or disagree with the following statement? Same sex marriages should be allowed throughout europe (1 2 3 4 5) QC4_7: In (OUR COUNTRY) when a company wants to hire someone and has the choice between two candidates with equal skills and qualifications, which of the following criteria may, in your opinion, put one candidate at a disadvantage? The candidate’s gender or sex (man or woman) QC4_8: In (OUR COUNTRY) when a company wants to hire someone and has the choice between two candidates with equal skills and qualifications, which of the following criteria may, in your opinion, put one candidate at a disadvantage? The candidate’s gender identity (being transgender) QC5_3: in the last 12 month have you done: You have joined an association or campaign that defends people against discrimination? (1=yes, 2=no,3=dk)
+
+```{r}
+#| echo: false
+data <- data %>%
+  mutate(across(
+    c(
+      qc20,        # OFFICIAL DOCUMENTS SHOULD INCLUDE THIRD GENDER OPTION
+      qc4_7,       # JOB CANDIDATE DISADVANTAGE: GENDER
+      qc4_8,       # JOB CANDIDATE DISADVANTAGE: GENDER IDENTITY
+      qc5_3,       # ACTIONS AGAINST DISCRIMINATION - JOINED ASSOCIATION/CAMPAIGN
+      LGBT..Policy.Index
+    ),
+    as.factor
+  ))
+
+
+
+```
+
+```{r}
+desc_stats <- data |> 
+  summarise(
+    # Binary (0/1: y/n, 3 = idk)
+    Mean_Binary_qc19 = mean(as.numeric(qc19_binary), na.rm = TRUE),  
+    Mean_Binary_qc20 = mean(as.numeric(qc20), na.rm = TRUE),  
+    
+    # Likert-Skalen (1-5)
+    Mean_Likert_qc15_1 = mean(as.numeric(qc15_1), na.rm = TRUE),  
+    Mean_Likert_qc15_2 = mean(as.numeric(qc15_2), na.rm = TRUE),
+    Mean_Likert_qc15_3 = mean(as.numeric(qc15_3), na.rm = TRUE)
+  )
+
+desc_stats
+
+```
+
+The analysis shows clear differences in support for various aspects of LGBT+ rights. It is particularly noticeable that both transgender-relevant topics and LGB rights tend to be rated positively overall, but with certain differences in the intensity of approval. The average agreement with the possibility of transgender people being able to adapt their official documents to their gender identity (qc19) is 1.40. This indicates that a majority of respondents are in favor of this measure, although “Don't Know” responses could play a role. The introduction of a third gender option on official documents (qc20) received slightly less approval with an average value of 1.72, which indicates that this measure is discussed somewhat more controversially.
+
+In comparison, the values for the general equality of LGB people (qc15_1,, qc15_2 , qc15_3) are more on the approving side of the scale with average values between 2.17 and 2.38 (1 = strongly approve, 5 = strongly disapprove). This means that the majority of respondents tend to agree with these statements. However, the values are not extremely low, which indicates that there is still a certain skepticism or reluctance in parts of the population.
+
+Identifiying how much people chooses the third option: "i dont know" in percentage:
+
+```{r}
+dk_percentage <- data |> 
+  summarise(
+    qc19 = sum(qc19 == "DK", na.rm = TRUE) / n() * 100,
+    qc20 = sum(qc20 == "DK", na.rm = TRUE) / n() * 100
+  )
+
+dk_percentage
+
+```
+
+qc19 (Transgender people should be able to adapt official documents) → 11.95% qc20 (Third gender option in official documents) → 11.62%
+
+Country differences:
+
+```{r}
+dk_summary <- data |> 
+  group_by(country_name) |> 
+  summarise(
+    DK_qc19 = sum(qc19 == "DK", na.rm = TRUE) / n() * 100,
+    DK_qc20 = sum(qc20 == "DK", na.rm = TRUE) / n() * 100
+  ) |> 
+  pivot_longer(cols = c(DK_qc19, DK_qc20), names_to = "Question", values_to = "DK_Percentage")
+
+
+ggplot(dk_summary, aes(x = reorder(country_name, DK_Percentage), y = DK_Percentage, fill = Question)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black") +
+  coord_flip() +
+  scale_fill_manual(values = c("DK_qc19" = "pink", "DK_qc20" = "orange"),
+                    labels = c("qc19: Transgender documentchange", "qc20: third genderoption")) +
+  labs(title = "Don't Know Rate ",
+       x = "country", y = "% of dont know answers",
+       fill = "Question") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 10, face = "bold"))
+
+
+
+```
+
+-\> yyou can see clear differences in the response rates. While in bulgaria every 5. person selected "dont know" for transgender document change (qc19) in Belgium only less than 5% choosed this option.
+
+Transgender Rights in Europe: Which Countries Support Legal Gender Changes?
+
+```{r}
+qc19_summary_sorted <- data %>%
+  group_by(country_name) %>%
+  mutate(total_responses = n()) %>%  
+  group_by(country_name, qc19_numeric) %>%
+  summarise(count = n(), total_responses = first(total_responses), .groups = "drop") %>%
+  mutate(percentage = (count / total_responses) * 100) %>%
+  filter(qc19_numeric == "1") %>%
+  arrange(percentage)
+
+
+ggplot(qc19_summary_sorted, aes(x = reorder(country_name, percentage), y = percentage, fill = percentage)) +
+  geom_bar(stat = "identity", color = "black", width = 0.7) +
+  coord_flip() +
+  scale_fill_gradientn(
+    colors = c("red", "orange", "yellow", "green", "blue", "purple"), 
+    values = rescale(c(min(qc19_summary_sorted$percentage), max(qc19_summary_sorted$percentage))),
+    guide = "colorbar"
+  ) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), hjust = -0.2, size = 5, fontface = "bold") +
+  labs(
+    title = "Support for Transgender Document Change (qc19) per Country",
+    x = "Country",
+    y = "Support Rate (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    legend.position = "right"
+  )
+
+
+```
+
+Results: The Netherlands (88%), Spain (76%) and Malta (76%) are the countries with the highest approval ratings.Countries such as Germany (62%), Sweden (62%) and Austria (57%) also show a majority in favor of changing the law, but at a lower level than the frontrunners. In these countries, there appears to be ongoing social debate and differing opinions. Bulgaria (12%), Hungary (14%), Romania (22%) and Slovakia (24%) have the lowest approval ratings.
+
+Plotting the LGTB-Index for each country in europe
+
+```{r}
+world <- ne_countries(scale = "medium", returnclass = "sf")
+  
+map_data <- world %>%
+  left_join(data, by = c("name" = "country_name"))
+
+map_data$LGBT..Policy.Index <- as.numeric(as.character(map_data$LGBT..Policy.Index))
+
+map_data <- map_data %>%
+  filter(!is.na(LGBT..Policy.Index)) %>%
+  group_by(admin) %>%
+  slice(1) %>%  
+  ungroup()
+
+pal <- colorBin(
+  palette = c("red", "orange", "yellow", "green", "blue", "purple"),
+  domain = map_data$LGBT..Policy.Index,
+  bins = 6,
+  na.color = "transparent"
+)
+
+pmap <- leaflet(data = map_data) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~pal(LGBT..Policy.Index),
+    color = "white",
+    weight = 0.5,
+    opacity = 1,
+    fillOpacity = 0.7,
+    highlight = highlightOptions(weight = 2, color = "black", bringToFront = TRUE),
+    label = ~paste0(name, ": ", round(LGBT..Policy.Index, 1)),  # Entfernt das "%"
+    labelOptions = labelOptions(direction = "auto")
+  ) %>%
+  addLegend(
+    pal = pal,
+    values = map_data$LGBT..Policy.Index,
+    position = "topright",
+    title = "LGBT Index",
+    opacity = 1
+  )
+
+pmap
+
+```
+
+Malta has the highest score, well above all other countries. Sweden, Netherlands, UK, Germany, France) have relatively high values. Eastern European countries (Latvia, Poland, Bulgaria, Romania, Hungary) have the lowest values in the LGBT Index.
+
+We want to investigate whether there are significant differences in the laws in different parts of Europe. We therefore divided the countries into Eastern, Western, Southern and Northern Europe and compared the LGTB score.
+
+```{r}
+data <- data %>%
+  mutate(region = case_when(
+    country_name %in% c("Denmark", "Sweden", "Finland", "Estonia", "Latvia", "Lithuania") ~ "Northern Europe",
+    country_name %in% c("Germany", "France", "Netherlands", "Belgium", "Luxembourg", 
+                        "United Kingdom", "United Kingdom of Great Britain and Northern Ireland",  
+                        "Ireland", "Austria") ~ "Western Europe",
+    country_name %in% c("Spain", "Italy", "Portugal", "Greece", "Malta", "Cyprus") ~ "Southern Europe",
+    country_name %in% c("Poland", "Hungary", "Czechia", "Slovakia", "Romania", 
+                        "Bulgaria", "Croatia", "Slovenia") ~ "Eastern Europe",
+    TRUE ~ "Other"
+  ))
+
+data <- data %>%
+  mutate(LGBT..Policy.Index = as.numeric(as.character(LGBT..Policy.Index)))
+
+ggplot(data, aes(x = region, y = LGBT..Policy.Index, fill = region)) +
+  geom_boxplot() +
+  labs(title = "LGBT Policy Index by Region",
+       x = "Region", y = "LGBT Policy Index") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+             
+```
+
+Western Europe has the highest LGBT index, with a high median and a relatively small range. Northern Europe shows a large variance, with some countries having very high values and others in the middle. Southern Europe is lower overall than Northern and Western Europe, with a wide range of values. Eastern Europe has the lowest values, with a median of around 5 and lower protection rights for LGBT people.
+
+```{r}
+cor_data <-data %>%
+  select(qc19, qc20, qc15_1, qc15_2, qc15_3,LGBT..Policy.Index) %>%
+  mutate(across(everything(), as.numeric))  
+
+cor_matrix <- cor(cor_data, use = "pairwise.complete.obs")
+
+cor_matrix
+
+ggcorrplot(cor_matrix, method = "circle", type = "lower",
+           lab = TRUE, lab_size = 4, colors = c("red", "white", "blue"),
+           title = "Correlation Matrix of Selected Variables")
+             
+```
+
+The correlation table highlights interesting connections between societal views on LGBTI+ rights and the LGBT Policy Index. The strongest positive correlation appears between these variables: qc15_1 which gauges equal rights for LGB people; qc15_2 which measures acceptance of same-sex relationships; and qc15_3 which covers marriage equality. These values range from 0.75 to 0.82. It indicates that nations with high acceptance of LGB rights generally back marriage equality too. There's a moderate correlation between qc19 which covers support for transgender document changes and qc20 which deals with a third gender option, clocking in at 0.59. This suggests that countries with advanced laws for trans people often favor a third gender option on official documents as well. But the correlations between qc19/qc20 and general LGBTI+ attitudes ‒ qc15\_\* ‒ are moderate (0.33–0.43). A positive attitude towards LGB rights often occurs alongside supportive views on trans issues.
+
+```{r}
+
+lm_model <- lm(LGBT..Policy.Index ~ qc19 + qc20 + qc15_1 + qc15_2 + qc15_3, data = data)
+
+summary(lm_model)
+
+```
+
+The results show that approval of LGBT rights is strongly associated with a higher LGBT Policy Index. the strongest negative effects come from rejection of “marriage for all” (-1.76 points) and same-sex relationships (-0.94 points). neutral answers (“don't know”) are often as negative as rejection - uncertainty is therefore a strong signal for less legal protection of LGBT+ rights. the transgender-specific questions (qc19, qc20) are also significant, but with somewhat weaker effects than LGB rights. the model is significant, but only explains approx. 26.5% of the variance - other factors also play a role.
+
+```{r}
+# interaction model
+
+lm_model_interact <- lm(LGBT..Policy.Index ~ qc19 * region + qc20 * region, data = data)
+
+summary(lm_model_interact)
+
+```
+
+In principle, the effects of qc19 and qc20 are relatively low in Eastern Europe, but uncertainty (“I don't know”) leads to stronger negative effects than rejection. regionNorthern Europe = +3.17\* Northern Europe has on average 3.17 points higher LGBT rights than Eastern Europe.\
+regionSouthern Europe = +3.23\* Southern Europe has on average 3.23 points higher LGBT rights than Eastern Europe.\
+regionWestern Europe = +4.19\* Western Europe has on average 4.19 points higher LGBT rights than Eastern Europe. Western Europe is the most progressive, followed by Southern Europe and Northern Europe, while Eastern Europe has the lowest index as a reference category.
+
+In Northern & Southern Europe, disagreement with qc19 is strongly associated with lower LGBT rights - much more so than in Eastern Europe or Western Europe. In Western Europe, approval or disapproval of qc19 is not as important for the LGBT Policy Index, which means that other factors are more decisive there. In Northern Europe, rejection or uncertainty about a third option is associated with lower LGBT rights. In Southern Europe, uncertainty about qc20 has the opposite effect - there the discussion about the topic could be a sign of progress. In Western Europe, these issues hardly play a role in the LGBT index, as legal protection is high anyway. R² = 0.4341 43.4% of the variance in the LGBT Policy Index is explained by the model. p-value \< 2.2e-16 The model is highly significant.The new model explains 17% more variance, i.e. taking the region into account makes the model significantly better.
+
+## Economic variables
+
+In this last section, we will identify the economic variables of the survey plus some external ones. The variables that we consider are relevant are the following: internac_trade = qa1, trade_tariffs = qa12, trade_agreements = qa13, online_purchases = qa14, trust_EU_trade = qa17, occupation = d15a, past_occupation = d15b, urban_rural = d25, financial_difficulties = d60, social_class = d63. We will also include a couple of extra ones in the next piece of code:
+
+```{r}
+
+# Let´s first select our variables of interest:
+economic_data <- data |> select(
+  "qc19", "country_name", "d11", "qa1", "qa12", "qa13", "qa14", "qa17","d15a", "d15b", "d25", "d60", "d63") |> 
+  rename(age = d11, 
+         internac_trade = qa1,
+         trade_tariffs = qa12,
+         trade_agreements = qa13,
+         online_purchases = qa14,
+         trust_EU_trade = qa17,
+         occupation = d15a,
+         past_occupation = d15b,
+         urban_rural = d25,
+         financial_difficulties = d60,
+         social_class = d63
+     )
+
+
+
+# We will get the Actual Individual Consumption metric
+
+# While GDP is mainly an indicator of the level of economic activity, actual individual consumption (AIC) is an alternative indicator better adapted to describe the material welfare of households. found here (https://ec.europa.eu/eurostat/statistics-explained/index.php?title=GDP_per_capita,_consumption_per_capita_and_price_level_indices#Data_sources)
+
+AIC_per_capita <- read_excel("AIC_per_capita.xlsx")
+
+AIC_per_capita <- AIC_per_capita |> rename("countries"="TIME")
+
+AIC_per_capita
+# We will get the unemployment rate
+
+unemployment_rate <- read_excel("unemployment_rate.xlsx")
+unemployment_rate <-unemployment_rate |>  pivot_longer(-countries, names_to = "years", values_to = "unemployment_rate") |> filter(years == 2019) |> select(-years)
+unemployment_rate$unemployment_rate <- as.numeric(unemployment_rate$unemployment_rate)
+
+unemployment_rate
+# We will get the minimum wage
+minimum_wage <- read_excel("EU_minimum_wage.xlsx")
+minimum_wage <- minimum_wage |> pivot_longer(-countries, names_to = "years", values_to = "min_wage")|> filter(years == 2019) |> select(-years)
+minimum_wage$min_wage <- as.numeric(minimum_wage$min_wage)
+minimum_wage
+
+# Merge the economic variables: 
+
+AIC_and_unemployment <- full_join(AIC_per_capita, unemployment_rate, by = "countries")
+economic_variables <- full_join(AIC_and_unemployment,minimum_wage, by = "countries")
+economic_variables
+
+# Finally, we merge the original survey data with the new economic variables
+economic_data <- economic_data |> left_join(economic_variables, by = c("country_name" = "countries"))
+
+economic_data
+```
+
+Now we will analyze the data. We are going to check for Missing Data.
+
+```{r}
+# I will change those Na with 0. In the past_occupation case, having a 0 will #signify that there was no previous occupation.
+
+set.seed(123)
+colSums(is.na(economic_data))
+
+cols_to_replace <- c("past_occupation")
+
+
+economic_data <- economic_data |> mutate(across(all_of(cols_to_replace), ~ replace_na(., 0)))
+
+# the rest of the variables with NA´s are due to a lack of information of those countries. They are the external economic variables
+
+# Let's perform multiple imputation on missing values in minimum wage because it reduces bias, preserves variability, and maintains relationships between variables. Unlike complete-case analysis, which can introduce systematic bias and reduce statistical power, MI generates multiple plausible datasets, capturing uncertainty in missing values. This approach is particularly important for economic variables, which are often correlated and not missing completely at random. 
+
+# let´s do it with MICE
+
+
+variables <- c("original", "imputed_pmm", "imputed_cart", "imputed_lasso")
+titles <- c("Original Data", "Predictive Mean Matching", "Classification & Regression Trees", "Lasso Regression")
+colors_fill <- c("black", "#E69F00", "#56B4E9", "#009E73")
+
+
+min_wage_mice_imputed <- data.frame(
+  original = economic_variables$min_wage,
+  imputed_pmm = complete(mice(economic_variables, m=5, method = "pmm", seed=123))$min_wage,
+  imputed_cart = complete(mice(economic_variables, m=5, method = "cart", seed=123))$min_wage,
+  imputed_lasso = complete(mice(economic_variables, m=5, method = "lasso.norm", seed=123))$min_wage
+)
+
+# --- the most similar distribution for min_wage is the lasso regression
+min_wage_mice_imputed_long <- min_wage_mice_imputed |> 
+  pivot_longer(all_of(variables), names_to = "method", values_to = "value")
+
+
+
+min_wage_mice_imputed_long |> 
+  mutate(title = factor(method, levels = variables, labels = titles)) |> 
+
+ggplot(aes(x = value, fill = title)) +
+  geom_histogram(binwidth = 1, color = "#808080", position = "identity") +
+  facet_wrap(~title, scales = "free_y") +
+  scale_fill_manual(values = colors_fill) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+
+# Now let´s integrate the imputed values into the original table:
+
+economic_variables <- economic_variables |> 
+  mutate(
+    min_wage = ifelse(is.na(min_wage), min_wage_mice_imputed$imputed_lasso, min_wage)
+  )
+data <- data |> left_join(economic_variables, by = c("country_name" = "countries"))
+
+
+```
+
+Now, let´s do exploratory data analysis:
+
+```{r}
+# distribution of categorical variables: 
+
+# the vast majority of respondents said: Yes, international trade is benefiting somewhat
+ggplot(data, aes(x = as.factor(qa1))) +
+  geom_bar() +
+  labs(title = "Distribution of Trade Benefit Responses", x = "Trade Benefit", y = "Count")
+
+## Numeric variable analysis:
+AIC_analysis <- data |> distinct(country_name, AIC)
+# distribution of AIC
+ggplot(AIC_analysis, aes(x = reorder(country_name, -AIC), y = AIC)) +
+  geom_bar(stat = "identity", fill = "darkgreen") +
+  coord_flip() +  # Rotate for better readability
+  labs(title = "Distribution of AIC (Adjusted Income per Capita)",
+       y = "AIC", x = "Country") +
+  theme_minimal()
+
+#minimum salary distribution
+
+Salary_analysis <- data |> distinct(country_name, min_wage)
+Salary_analysis <- Salary_analysis[!duplicated(Salary_analysis$country_name), ]
+ggplot(Salary_analysis, aes(x = reorder(country_name, -min_wage), y = min_wage)) +
+  geom_bar(stat = "identity", fill = "darkred") +
+  coord_flip() +
+  labs(title = "Minimum Wage per Country", y = "Minimum Wage", x = "Country") +
+  theme_minimal()
+# unemployment rate 
+
+unemployment_rate_analysis <- data |> distinct(country_name, unemployment_rate)
+
+ggplot(unemployment_rate_analysis, aes(x = reorder(country_name, -unemployment_rate), y = unemployment_rate)) +
+  geom_bar(stat = "identity", fill = "darkblue") +
+  coord_flip() +
+  labs(title = "Unemployment Rate per Country", y = "Unemployment Rate (%)", x = "Country") +
+  theme_minimal()
+
+
+
+
+```
+
+```{r}
+
+
+# Now, let´s explore the relations
+
+
+#This table presents data on support rates for transgender rights  and Adjusted Individual Consumption (AIC) per country. The main goal is to understand whether economic prosperity is linked to greater support for trans rights. France (0.72) and Belgium (0.71) show the highest support levels. Wealthier countries (e.g., Germany with an AIC of 2,149,651 and France with 1,534,823) tend to show higher support levels.
+
+support_rates <- data %>%
+  group_by(country_name) %>%
+  summarise(support_rate = sum(qc19 == 1, na.rm = TRUE) / sum(qc19 %in% c(1, 2, 3), na.rm = TRUE),
+            AIC = mean(AIC, na.rm = TRUE))  
+  
+support_rates
+
+
+# Support for Trans Rights by International Trade Benefit. If the responses are Not benefiting  (international trade), the support for trans rights decreases a lot. 
+ggplot(data, aes(x = as.factor(qa1), fill = as.factor(qc19))) +
+  geom_bar(position = "dodge") +
+  labs(title = "Support for Trans Rights by International Trade Benefit",
+       x = "International Trade Benefit", 
+       y = "Count", 
+       fill = "Support for Trans Rights (qc19)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+## Feature Engineering
+
+All the variables we've worked with:
+
+```{r}
+data_selected <- data |> select(
+  country_name, region, LGBT..Policy.Index, 
+  qc19_numeric, qc20,    
+  qc15_1, qc15_2, qc15_3,    
+  qc17_3, qc17_4, qc18_2, qc18_3,  
+  qc1_4, qc1_8, qc2_4, qc2_6, qc4_7, qc4_8, qc5_3,
+  d11, d15a, d15b, d25, d60, d63,  
+  qa1, qa12, qa13, qa14, qa17,   
+  unemployment_rate, min_wage, AIC,
+  sd3, d1r2, d10, gen3, gen6
+)
+```
+
+Now we want to identify, which of the variables have a relationship with the target variable: we using multiple chi-quadrat test for the factored variables
+
+```{r}
+data_selected$country_name <- as.factor(data_selected$country_name)
+data_selected$region <- as.factor(data_selected$region)
+
+factor_vars <- names(data_selected)[sapply(data_selected, is.factor)]
+
+chi_results <- numeric(length(factor_vars))
+names(chi_results) <- factor_vars
+
+for (var in factor_vars) {
+  test <- chisq.test(table(data_selected[[var]], data_selected$qc19_numeric))
+  chi_results[var] <- test$p.value  
+}
+
+chi_results <- sort(chi_results)
+
+chi_results
+
+```
+
+-\> because all of them are signficant we keep them
+
+Test for multicollinearity:
+
+```{r}
+
+cor_matrix <- cor(data_selected[, sapply(data_selected, is.numeric)], use = "pairwise.complete.obs")
+
+ggcorrplot(cor_matrix, lab = TRUE)
+
+```
+
+Strong Negative Correlation Between d11 (Age) and gen6 (-0.79) This confirms that d11 (Age) and gen6 are highly dependent. Keeping both variables in a model may lead to multicollinearity issues. Moderate Positive Correlation Between d11 (Age) and gen3 (0.55) Strong Positive Correlation Between LGBT..Policy.Index and qc19_numeric (0.34) There is a noticeable relationship between the LGBT Policy Index and the target variable (qc19_numeric). This suggests that countries with higher LGBT policy scores might be more supportive in terms of qc19_numeric. min_wage and AIC Have a Noticeable Correlation (0.57) This might indicate an economic relationship between minimum wage levels and another aspect captured by AIC. Most Other Variables Show Weak Correlations Many values are close to 0, indicating little to no linear relationship. We keep the variable age, and remove gen6 and gen3
+
+To select the most important features we use the method set()
+
+```{r}
+
+data_selected <- data_selected %>%
+  select(-gen6, -gen3)
+
+best_model <- step(glm(qc19_numeric ~ ., data = data_selected, family = binomial), direction = "both")
+
+```
+
+#Model
+
+Step: AIC=8607.78 qc19_numeric \~ country_name + qc20 + qc15_1 + qc15_2 + qc15_3 + qc17_3 + qc17_4 + qc18_2 + qc18_3 + qc1_4 + qc4_7 + qc4_8 + qc5_3 + d11 + d15a + d15b + d60 + qa1 + qa14 + d10
+
+```{r}
+
+
+test_model <- glm(qc19_numeric ~ country_name + qc20 + qc15_1 + qc15_2 + qc15_3 + 
+                    qc17_3 + qc17_4 + qc18_2 + qc18_3 + qc1_4 + qc4_7 + qc4_8 + 
+                    qc5_3 + d11 + d15a + d15b + d60 + qa1 + qa14 + d10,
+                  data = data_selected, family = binomial)
+
+# Compute Variance Inflation Factor (VIF)
+vif_values <- vif(test_model) 
+print(vif_values)
+
+
+
+
+```
+
+No variable must be removed based on VIF, as all adjusted GVIF values are \< 2.
+
+#training and testing set
+
+```{r}
+
+set.seed(123)
+
+in_train <- createDataPartition(y = data_pred$binary_qc19, p = 0.8, list = FALSE)
+
+in_train <- in_train[, 1]
+
+training <- data_pred[in_train, ]
+testing <- data_pred[-in_train, ]
+
+#remove rows with NA's
+training <- na.omit(training)
+testing <- na.omit(testing)
+
+
+```
