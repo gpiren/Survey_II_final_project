@@ -1136,21 +1136,101 @@ Step: AIC=8607.78 qc19_numeric \~ country_name + qc20 + qc15_1 + qc15_2 + qc15_3
 
 ```{r}
 
-test_model <- glm(qc19_numeric ~ country_name + qc20 + qc15_1 + qc15_2 + qc15_3 + 
-                    qc17_3 + qc17_4 + qc18_2 + qc18_3 + qc1_4 + qc4_7 + qc4_8 + 
-                    qc5_3 + d11 + d15a + d15b + d60 + qa1 + qa14 + d10,
-                  data = data_selected, family = binomial)
+glmer_model <- glmer(qc19_numeric ~ d10 + d11 + I(d11^2) + qc20 + qc15_1 + qc15_2 + qc15_3 + 
+                        qc17_3 + qc17_4 + qc18_2 + qc18_3 + qc1_4 + qc4_7 + qc4_8 + 
+                        qc5_3 + d15a + d15b + d60 + qa1 + qa14 + (1 | country_name), 
+                      data = data_selected, family = binomial,
+                      control = glmerControl(optimizer = "bobyqa", 
+                                             optCtrl = list(maxfun = 100000)))
 
-# Compute Variance Inflation Factor (VIF)
-vif_values <- vif(test_model) 
+
+summary(glmer_model)
+
+```
+
+Due to scaling problems, we scaled the numerical values and removing the non-significant variables:
+```{r}
+data_selected <- data_selected %>%
+  mutate(
+    d11_scaled = scale(d11),
+    d15a_scaled = scale(d15a),
+    d15b_scaled = scale(d15b),
+    d60_scaled = scale(d60)
+  )
+
+glmer_model <- glmer(qc19_numeric ~ d10 + d11_scaled + qc20 + qc15_1 + qc15_2 + 
+    qc15_3 + qc17_4 + qc18_3 + qc1_4 + qc4_7 + d15b + d15a + d60 + qa14 + (1 | country_name),
+    data = data_selected, family = binomial,
+    control = glmerControl(optimizer = "nloptwrap", optCtrl = list(maxfun = 2e5)))
+
+vif_values <- car::vif(glmer_model)
 print(vif_values)
 
-summary(test_model)
+
+aic_final <- AIC(glmer_model)
+bic_final <- BIC(glmer_model)
+logLik_final <- logLik(glmer_model)
+
+# Print the results
+print(paste("Final Model - AIC:", round(aic_final, 2)))
+print(paste("Final Model - BIC:", round(bic_final, 2)))
+print(paste("Final Model - Log-Likelihood:", round(logLik_final, 2)))
 
 
 ```
 
-No variable must be removed based on VIF, as all adjusted GVIF values are \< 2.
+ 
+
+```{r}
+numeric, pred_classes)
+print(conf_matrix)
+
+# Calculate performance metrics
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+precision <- conf_matrix[2,2] / sum(conf_matrix[,2])
+recall <- conf_matrix[2,2] / sum(conf_matrix[2,])
+f1_score <- 2 * ((precision * recall) / (precision + recall))
+
+# Print results
+print(paste("Accuracy:", round(accuracy, 4)))
+print(paste("Precision:", round(precision, 4)))
+print(paste("Recall:", round(recall, 4)))
+print(paste("F1-Score:", round(f1_score, 4)))
+
+
+
+data_selected$d11_scaled <- scale(data_selected$d11)
+
+# Modellzusammenfassung anzeigen
+summary(glmer_model_updated)
+
+vif_values <- vif(glmer_model_updated)
+print(vif_values)
+
+library(lme4)
+
+glmer_model_updated <- glmer(qc19_numeric ~ d10 + d11_scaled + I(d11^2) + qc20 + 
+                              qc15_1 + qc15_2 + qc15_3 + qc17_4 + qc18_2 + 
+                              qc18_3 + qc1_4 + qc4_7 + d15b + d15a + d60 + qa14 + 
+                              (1 | country_name), 
+                              data = data_selected, 
+                              family = binomial, 
+                              control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 200000)))
+
+# Modellzusammenfassung anzeigen
+summary(glmer_model_updated)
+
+
+library(car)
+vif_values <- vif(glmer_model_updated)
+print(vif_values)
+
+
+```
+
+
+
+
 
 
 ```{r}
