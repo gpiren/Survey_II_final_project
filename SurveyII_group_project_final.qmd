@@ -1070,10 +1070,10 @@ ggplot(data, aes(x = as.factor(qa1), fill = as.factor(qc19))) +
 
 ```
 
+## Feature Engineering
 
-## Feature Engineering 
+All the variables we've worked with:
 
-All the variables we've worked with: 
 ```{r}
 data_selected <- data |> select(
   country_name, region, LGBT..Policy.Index, 
@@ -1084,31 +1084,38 @@ data_selected <- data |> select(
   d11, d15a, d15b, d25, d60, d63,  
   qa1, qa12, qa13, qa14, qa17,   
   unemployment_rate, min_wage, AIC,
-  sd3, d1r2, d10, gen4, gen5
+  sd3, d1r2, d10, gen3, gen6
 )
+
+save(data_selected, file = "data_selected.rda")
 
 
 ```
 
-
-
 Test for multicollinearity and linearity:
-```{r}
-alias_info <- alias(lm(qc19_numeric ~ ., data = data_selected))
-print(alias_info$Complete)  # List of depend variables
 
-#removing the variables which are depend 
-dependent_vars <- colnames(alias_info$Complete)  
+```{r}
+library(car)
+
+alias_info <- alias(lm(qc19_numeric ~ ., data = data_selected))
+print(alias_info$Complete)  # Liste der abhängigen Variablen anzeigen
+
+# Entferne diese abhängigen Variablen
+dependent_vars <- colnames(alias_info$Complete)
 data_selected <- data_selected[, !colnames(data_selected) %in% dependent_vars]
 
 
+library(MASS)
+best_model <- step(glm(qc19_numeric ~ ., data = data_selected, family = binomial), direction = "both")
+
+
 ```
 
-
 Test for multicollinearity and linearity:
+
 ```{r}
 
-str(data_selected_test)
+str(data_selected)
 # correlation 
 cor_matrix <- cor(data_selected[, sapply(data_selected, is.numeric)], use = "pairwise.complete.obs")
 
@@ -1116,17 +1123,75 @@ ggcorrplot(cor_matrix, lab = TRUE)
 
 
 ```
-- No extremely high correlation (>|0.75|) → No variables need to be removed immediately.
-- LGBT..Policy.Index has a moderate correlation with min_wage (0.43) & qc19_numeric (0.34) → This could be an important predictor
-- min_wage & AIC have a correlation of 0.57 → This is not critical, but should be tested in the model.
-- unemployment_rate is almost uncorrelated with all other variables → Could possibly be unimportant.
 
-
-
+-   No extremely high correlation (\>\|0.75\|) → No variables need to be removed immediately.
+-   LGBT..Policy.Index has a moderate correlation with min_wage (0.43) & qc19_numeric (0.34) → This could be an important predictor
+-   min_wage & AIC have a correlation of 0.57 → This is not critical, but should be tested in the model.
+-   unemployment_rate is almost uncorrelated with all other variables → Could possibly be unimportant.
 
 Test for multicollinearity and linearity:
+
 ```{r}
+
 data_selected$country_name <- as.factor(data_selected$country_name)
 data_selected$region <- as.factor(data_selected$region)
 
-``
+str(data_selected)
+chisq.test(table(data_selected$qc19_numeric, data_selected$country_name))
+chisq.test(table(data_selected$qc19_numeric, data_selected$region))
+
+
+factor_vars <- names(data_selected)[sapply(data_selected, is.factor)]
+
+# Leerer Vektor für p-Werte
+chi_results <- numeric(length(factor_vars))
+names(chi_results) <- factor_vars
+
+# Berechne Chi-Quadrat-Test für jede Faktor-Variable
+for (var in factor_vars) {
+  test <- chisq.test(table(data_selected[[var]], data_selected$qc19_numeric))
+  chi_results[var] <- test$p.value  # Speichere den p-Wert als numerischen Wert
+}
+
+# Sortiere die p-Werte in aufsteigender Reihenfolge
+chi_results <- sort(chi_results)
+
+# Zeige die Ergebnisse an
+print(chi_results)
+
+
+
+```
+
+#training and testing set
+
+```{r}
+
+set.seed(42)
+library(caret)
+
+train_index <- createDataPartition(data_selected$qc19_numeric, p = 0.8, list = FALSE)
+train_data <- data_selected[train_index, ]
+test_data <- data_selected[-train_index, ]
+
+
+```
+
+#Model
+
+Test for multicollinearity and linearity:
+
+```{r}
+
+library(lme4)
+
+glmm_model <- glmer(qc19_numeric ~ LGBT..Policy.Index + min_wage + unemployment_rate + (1 | country_name),
+                    data = data_selected, 
+                    family = binomial, 
+                    control = glmerControl(optimizer = "bobyqa")) 
+
+summary(glmm_model)
+
+
+
+```
