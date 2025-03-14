@@ -1073,19 +1073,60 @@ ggplot(data, aes(x = as.factor(qa1), fill = as.factor(qc19))) +
 
 ## Feature Engineering 
 
-
+All the variables we've worked with: 
 ```{r}
 data_selected <- data |> select(
-  country_name, LGBT..Policy.Index, qc19_numeric, region,qc20,      
-  qc15_1,    
-  qc15_2,    
-  qc15_3,    
-  qc4_7,    
-  qc4_8,
-   qc5_3
+  country_name, region, LGBT..Policy.Index, 
+  qc19_numeric, qc20,    
+  qc15_1, qc15_2, qc15_3,    
+  qc17_3, qc17_4, qc18_2, qc18_3,  
+  qc1_4, qc1_8, qc2_4, qc2_6, qc4_7, qc4_8, qc5_3,
+  d11, d15a, d15b, d25, d60, d63,  
+  qa1, qa12, qa13, qa14, qa17,   
+  unemployment_rate, min_wage, AIC,
+  sd3, d1r2, d10, gen4, gen5
 )
-
-print(data_selected)
 
 
 ```
+
+
+
+Test for multicollinearity and linearity:
+```{r}
+alias_info <- alias(lm(qc19_numeric ~ ., data = data_selected))
+print(alias_info$Complete)  # List of depend variables
+
+#removing the variables which are depend 
+dependent_vars <- colnames(alias_info$Complete)  
+data_selected <- data_selected[, !colnames(data_selected) %in% dependent_vars]
+
+
+```
+
+
+Test for multicollinearity and linearity:
+```{r}
+
+str(data_selected_test)
+# correlation 
+cor_matrix <- cor(data_selected[, sapply(data_selected, is.numeric)], use = "pairwise.complete.obs")
+
+ggcorrplot(cor_matrix, lab = TRUE)
+
+
+```
+- No extremely high correlation (>|0.75|) → No variables need to be removed immediately.
+- LGBT..Policy.Index has a moderate correlation with min_wage (0.43) & qc19_numeric (0.34) → This could be an important predictor
+- min_wage & AIC have a correlation of 0.57 → This is not critical, but should be tested in the model.
+- unemployment_rate is almost uncorrelated with all other variables → Could possibly be unimportant.
+
+
+
+
+Test for multicollinearity and linearity:
+```{r}
+data_selected$country_name <- as.factor(data_selected$country_name)
+data_selected$region <- as.factor(data_selected$region)
+
+``
