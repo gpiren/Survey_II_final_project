@@ -28,7 +28,7 @@ library(lme4)
 library(car)
 library(nnet)
 library(reshape2)
-library(MASS)
+library(pROC)
 ```
 
 Data:
@@ -936,7 +936,6 @@ Now we will analyze the data. We are going to check for Missing Data.
 
 ```{r}
 # I will change those Na with 0. In the past_occupation case, having a 0 will #signify that there was no previous occupation.
-
 set.seed(123)
 colSums(is.na(economic_data))
 
@@ -1126,7 +1125,8 @@ To select the most important features we use the method set()
 data_selected <- data_selected %>%
   select(-gen6, -gen3)
 
-best_model <- step(glm(qc19_numeric ~ ., data = data_selected, family = binomial), direction = "both")
+best_model <- MASS::stepAIC(glm(qc19_numeric ~ ., data = data_selected, family = binomial), direction = "both")
+
 
 ```
 
@@ -1135,7 +1135,6 @@ best_model <- step(glm(qc19_numeric ~ ., data = data_selected, family = binomial
 Step: AIC=8607.78 qc19_numeric \~ country_name + qc20 + qc15_1 + qc15_2 + qc15_3 + qc17_3 + qc17_4 + qc18_2 + qc18_3 + qc1_4 + qc4_7 + qc4_8 + qc5_3 + d11 + d15a + d15b + d60 + qa1 + qa14 + d10
 
 ```{r}
-
 
 test_model <- glm(qc19_numeric ~ country_name + qc20 + qc15_1 + qc15_2 + qc15_3 + 
                     qc17_3 + qc17_4 + qc18_2 + qc18_3 + qc1_4 + qc4_7 + qc4_8 + 
@@ -1146,12 +1145,71 @@ test_model <- glm(qc19_numeric ~ country_name + qc20 + qc15_1 + qc15_2 + qc15_3 
 vif_values <- vif(test_model) 
 print(vif_values)
 
-
+summary(test_model)
 
 
 ```
 
 No variable must be removed based on VIF, as all adjusted GVIF values are \< 2.
+
+
+```{r}
+
+
+# Wahrscheinlichkeiten für Klasse 1 (Positive Klasse)
+pred_probs <- predict(test_model, type = "response")
+
+pred_probs <- predict(test_model, newdata = data_selected, type = "response")
+
+
+# ROC-Kurve berechnen
+roc_curve <- roc(data_selected$qc19_numeric, pred_probs)
+
+# AUC-Wert ausgeben
+print(auc(roc_curve))
+
+# ROC-Kurve plotten
+plot(roc_curve, col = "blue", main = "ROC Curve")
+
+optimal_threshold <- coords(roc_curve, "best", ret = "threshold")
+print(optimal_threshold)
+
+
+pred_classes <- ifelse(pred_probs > optimal_threshold, 1, 0)
+confusion_matrix <- table(data_selected$qc19_numeric, pred_classes)
+print(confusion_matrix)
+
+
+confusionMatrix(as.factor(pred_classes), as.factor(data_selected$qc19_numeric))
+
+print(length(data_selected$qc19_numeric))
+print(length(pred_classes))
+
+pred_probs <- predict(test_model, newdata = data_selected, type = "response")
+print(length(pred_probs))  # Sollte 27438 sein
+
+threshold <- 0.582771  # Dein gewählter Threshold
+pred_classes <- ifelse(pred_probs > threshold, 1, 0)
+print(length(pred_classes))  # Sollte ebenfalls 27438 sein
+
+confusion_matrix <- table(data_selected$qc19_numeric, pred_classes)
+print(confusion_matrix)
+
+accuracy <- (4014 + 5415) / sum(confusion_matrix)
+print(paste("Accuracy:", round(accuracy, 4)))
+
+precision <- 5415 / (5415 + 691)
+print(paste("Precision:", round(precision, 4)))
+
+recall <- 5415 / (5415 + 1208)
+print(paste("Recall:", round(recall, 4)))
+
+f1_score <- 2 * ((precision * recall) / (precision + recall))
+print(paste("F1-Score:", round(f1_score, 4)))
+
+
+```
+
 
 #training and testing set
 
