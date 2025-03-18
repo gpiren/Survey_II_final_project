@@ -14,21 +14,155 @@ editor: visual
 logo: https://www.rstudio.com/wp-content/uploads/2018/10/RStudio-Logo-Flat.png
 ---
 
-## Quarto
+## Data cleaning
 
-Quarto enables you to weave together content and executable code into a finished presentation. To learn more about Quarto presentations see <https://quarto.org/docs/presentations/>.
+-   Libraries and cleaning Data
 
-## Bullets
+-   Creating a data frame with column names and labels
 
-When you click the **Render** button a document will be generated that includes:
+-   Convert into tidy Data
 
--   Content authored with markdown
--   Output from executable code
+```{r Data cleaning}
+#| echo: false
 
-## Code
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(stringr) 
+library(lubridate)
+library(corrr)
+library(ggcorrplot)
+library(tidyr)
+library(scales)
+library(mice)
+library(readxl)
+library(leaflet)
+library(sf)
+library(RColorBrewer)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(corrplot)
+library(lme4) 
+library(car)
+library(nnet)
+library(reshape2)
+library(pROC)
 
-When you click the **Render** button a presentation will be generated that includes both content and the output of embedded code. You can embed code like this:
+data <- read_dta("ZA7575.dta")
+column_info <- data.frame(
+  column_name = colnames(data),
+  column_label = sapply(data, function(x) attr(x, "label"))
+)
+
+data <- data %>%
+  mutate(country_name = case_when(
+    q1_1  == 1 ~ "Belgium",
+    q1_2  == 1 ~ "Denmark",
+    q1_3  == 1 ~ "Germany",
+    q1_4  == 1 ~ "Greece",
+    q1_5  == 1 ~ "Spain",
+    q1_6  == 1 ~ "France",
+    q1_7  == 1 ~ "Ireland",
+    q1_8  == 1 ~ "Italy",
+    q1_9  == 1 ~ "Luxembourg",
+    q1_10 == 1 ~ "Netherlands",
+    q1_11 == 1 ~ "Portugal",
+    q1_12 == 1 ~ "United Kingdom",
+    q1_13 == 1 ~ "Austria",
+    q1_14 == 1 ~ "Sweden",
+    q1_15 == 1 ~ "Finland",
+    q1_16 == 1 ~ "Cyprus",
+    q1_17 == 1 ~ "Czech Republic",
+    q1_18 == 1 ~ "Estonia",
+    q1_19 == 1 ~ "Hungary",
+    q1_20 == 1 ~ "Latvia",
+    q1_21 == 1 ~ "Lithuania",
+    q1_22 == 1 ~ "Malta",
+    q1_23 == 1 ~ "Poland",
+    q1_24 == 1 ~ "Slovakia",
+    q1_25 == 1 ~ "Slovenia",
+    q1_26 == 1 ~ "Bulgaria",
+    q1_27 == 1 ~ "Romania",
+    q1_28 == 1 ~ "Croatia",
+    q1_29 == 1 ~ "Other countries",
+    q1_30 == 1 ~ "DK",
+    TRUE ~ NA_character_  
+  ))
+
+data$country_name <- gsub("Czech Republic", "Czechia", data$country_name)
+
+data <- data |> 
+  mutate(
+    qc19 = factor(qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "DK")),
+    d10 = case_when(
+      d10 == 1 ~ 1,  # Man for best practice
+      d10 == 2 ~ 0   # Woman
+    ),
+    d10 = factor(d10, levels = c(0, 1),
+                 labels = c("Woman", "Man"))
+  )
+
+```
+
+## legal Framework
+
+-   included the lgtb-rights index-data
+
+-   index captures to which extent LGBT+ people have the same rights as straight and cisgender people
+
+-   combines 18 individual policies, such as the legality of same-sex relationships, marriage, and gender marker changes
 
 ```{r}
-1 + 1
+#| echo: false
+lgbt_index <- read.csv("lgbt-rights-index.csv")
+
+lgbt_index <- lgbt_index |> filter(Year== 2019)
+
+data <- data %>%
+  left_join(lgbt_index, by = c("country_name" = "Entity"))
+```
+
+
+```{r}
+world <- ne_countries(scale = "medium", returnclass = "sf")
+  
+map_data <- world %>%
+  left_join(data, by = c("name" = "country_name"))
+
+map_data$LGBT..Policy.Index <- as.numeric(as.character(map_data$LGBT..Policy.Index))
+
+map_data <- map_data %>%
+  filter(!is.na(LGBT..Policy.Index)) %>%
+  group_by(admin) %>%
+  slice(1) %>%  
+  ungroup()
+
+pal <- colorBin(
+  palette = c("red", "orange", "yellow", "green", "blue", "purple"),
+  domain = map_data$LGBT..Policy.Index,
+  bins = 6,
+  na.color = "transparent"
+)
+
+pmap <- leaflet(data = map_data) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~pal(LGBT..Policy.Index),
+    color = "white",
+    weight = 0.5,
+    opacity = 1,
+    fillOpacity = 0.7,
+    highlight = highlightOptions(weight = 2, color = "black", bringToFront = TRUE),
+    label = ~paste0(name, ": ", round(LGBT..Policy.Index, 1)),  # Entfernt das "%"
+    labelOptions = labelOptions(direction = "auto")
+  ) %>%
+  addLegend(
+    pal = pal,
+    values = map_data$LGBT..Policy.Index,
+    position = "topright",
+    title = "LGBT Index",
+    opacity = 1
+  )
+
+pmap
 ```
