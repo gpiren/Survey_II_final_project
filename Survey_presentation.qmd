@@ -14,6 +14,10 @@ editor: visual
 logo: https://www.rstudio.com/wp-content/uploads/2018/10/RStudio-Logo-Flat.png
 ---
 
+```{r}
+knitr::opts_chunk$set(error = TRUE, warning = TRUE, message = TRUE)
+```
+
 ## Data cleaning
 
 -   Libraries and cleaning Data
@@ -22,9 +26,8 @@ logo: https://www.rstudio.com/wp-content/uploads/2018/10/RStudio-Logo-Flat.png
 
 -   Convert into tidy Data
 
-```{r Data cleaning}
+```{r Data cleaning, message=FALSE, warning=FALSE}
 #| echo: false
-
 library(haven)
 library(dplyr)
 library(ggplot2)
@@ -90,7 +93,10 @@ data <- data %>%
   ))
 
 data$country_name <- gsub("Czech Republic", "Czechia", data$country_name)
+```
 
+
+```{r echo=TRUE, results='hide'}
 data <- data |> 
   mutate(
     qc19 = factor(qc19, levels = c(1, 2, 3), labels = c("Yes", "No", "DK")),
@@ -104,7 +110,115 @@ data <- data |>
 
 ```
 
-## legal Framework
+## Descriptive Analysis 
+
+-   General descriptive analysis 
+
+-   Legal framework
+
+-   Historical background
+
+-   Cultural and Societal norms
+
+-   Economical analysis
+
+## General descriptive analysis
+
+-   Check for NA's 
+
+-   Total observations 27438 
+
+-   Total countries 28 
+
+-   Target variable --> qc19: Opinion on whether transgender people should be able to change official documents
+
+```{r}
+#| echo: false
+table_qc19 <- data |> 
+  count(qc19) |> 
+  mutate(percentage = n / sum(n) * 100)
+```
+
+##
+
+```{r}
+
+ggplot(data, aes(x = qc19, fill = qc19)) +
+  geom_bar() +
+  labs(title = "Transgender Support Distribution",
+       x = "Support level", y = "Number of answers") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Blues")
+
+```
+
+## Which Countries Support Legal Gender Changes?
+
+```{r}
+#| echo: false
+
+data <- data |> 
+  mutate(qc19_numeric = case_when(
+    qc19 == "Yes" ~ 1,  # Yes
+    qc19 == "No" ~ 0,  # No
+    qc19 == "DK" ~ NA_real_  # DK
+  ))
+
+selected_data_cultural <- data |> 
+  mutate(qc19_numeric = case_when(
+    qc19 == "Yes" ~ 1,  # Yes
+    qc19 == "No" ~ 0,  # No
+    qc19 == "DK" ~ NA_real_  # DK
+  )) |> 
+  select(
+    qc19_numeric,
+    sd3,
+    gen3,
+    gen4,
+    gen5,
+    gen6,
+    d10,
+    qc2t_3,
+    d1r2
+  )
+
+qc19_summary_sorted <- data %>%
+  group_by(country_name) %>%
+  mutate(total_responses = n()) %>%  
+  group_by(country_name, qc19_numeric) %>%
+  summarise(count = n(), total_responses = first(total_responses), .groups = "drop") %>%
+  mutate(percentage = (count / total_responses) * 100) %>%
+  filter(qc19_numeric == "1") %>%
+  arrange(percentage)
+```
+
+
+```{r}
+ggplot(qc19_summary_sorted, aes(x = reorder(country_name, percentage), y = percentage, fill = percentage)) +
+  geom_bar(stat = "identity", color = "black", width = 0.7) +
+  coord_flip() +
+  scale_fill_gradientn(
+    colors = c("red", "orange", "yellow", "green", "blue", "purple"), 
+    values = rescale(c(min(qc19_summary_sorted$percentage), max(qc19_summary_sorted$percentage))),
+    guide = "colorbar"
+  ) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), hjust = -0.2, size = 5, fontface = "bold") +
+  labs(
+    title = "Support for Transgender Document Change (qc19) per Country",
+    x = "Country",
+    y = "Support Rate (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    legend.position = "right"
+  )
+
+```
+
+## Legal Framework
 
 -   included the lgtb-rights index-data
 
@@ -122,6 +236,7 @@ data <- data %>%
   left_join(lgbt_index, by = c("country_name" = "Entity"))
 ```
 
+## LGBT Index by Country
 
 ```{r}
 world <- ne_countries(scale = "medium", returnclass = "sf")
@@ -166,3 +281,767 @@ pmap <- leaflet(data = map_data) %>%
 
 pmap
 ```
+
+## Dividing Europe in West/North/South and East
+
+```{r}
+data <- data %>%
+  mutate(region = case_when(
+    country_name %in% c("Denmark", "Sweden", "Finland", "Estonia", "Latvia", "Lithuania") ~ "Northern Europe",
+    country_name %in% c("Germany", "France", "Netherlands", "Belgium", "Luxembourg", 
+                        "United Kingdom", "United Kingdom of Great Britain and Northern Ireland",  
+                        "Ireland", "Austria") ~ "Western Europe",
+    country_name %in% c("Spain", "Italy", "Portugal", "Greece", "Malta", "Cyprus") ~ "Southern Europe",
+    country_name %in% c("Poland", "Hungary", "Czechia", "Slovakia", "Romania", 
+                        "Bulgaria", "Croatia", "Slovenia") ~ "Eastern Europe",
+    TRUE ~ "Other"
+  ))
+
+data <- data %>%
+  mutate(LGBT..Policy.Index = as.numeric(as.character(LGBT..Policy.Index)))
+
+ggplot(data, aes(x = region, y = LGBT..Policy.Index, fill = region)) +
+  geom_boxplot() +
+  labs(title = "LGBT Policy Index by Region",
+       x = "Region", y = "LGBT Policy Index") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+             
+```
+
+## LGTB Index and Region
+
+```{r echo=TRUE, results='hide'}
+
+lm_model_interact <- lm(LGBT..Policy.Index ~ qc19 * region + qc20 * region, data = data)
+
+summary(lm_model_interact)
+
+```
+
+-   North & South Europe: disagreement with qc19 is strongly associated with lower LGBT rights
+
+-   Western Europe: the approval or disapproval of qc19 is not as important for the LGBT Policy Index -\> other factors are more important there
+
+## Historical blocs
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+
+
+# socialist bloc - now EU countries
+socialist_bloc <- c("Bulgaria", "Croatia", "Czechia", "Estonia", "Hungary", 
+                    "Latvia", "Lithuania", "Poland", "Romania", "Slovakia", "Slovenia")
+
+# western bloc - now EU countries
+western_bloc <- c("Austria", "Belgium", "Cyprus", "Denmark", "Finland", 
+                  "France", "Greece", "Ireland", "Italy", "Luxembourg", 
+                  "Malta", "Netherlands", "Portugal", "Spain", "Sweden", "United Kingdom") # adding the UK because it was a member at the time of survey
+
+
+mixed_bloc <- c("Germany") # putting Germany into mixed for obvious reasons
+
+countries <- c(socialist_bloc, western_bloc, mixed_bloc)
+blocs <- c(rep("Socialist", length(socialist_bloc)), rep("Western", length(western_bloc)), rep("Mixed", length(mixed_bloc)))
+
+eu_blocs <- data.frame(Country = countries, Bloc = blocs)
+print(eu_blocs)
+
+eu_blocs$Bloc_binary <- ifelse(eu_blocs$Bloc == "Socialist", 0, 1)
+
+# to match the country_name column for joining tables later
+
+eu_blocs <-
+  eu_blocs |> 
+  rename(country_name = Country)
+
+
+save(eu_blocs, file = "eu_blocs.rda")
+
+data <- data |> 
+  left_join(eu_blocs, by = "country_name")
+
+summary_df_pol <- as.data.frame(table(data$qc19, data$Bloc))
+colnames(summary_df_pol) <- c("qc19", "Bloc", "Count")
+
+# Use the existing qc19 values which are "Yes", "No", "DK"
+# No need for levels = c("1", "2", "3") since qc19 is already labeled
+summary_df_pol$qc19_label <- factor(summary_df_pol$qc19, levels = c("Yes", "No", "DK"))
+
+
+```
+
+```{r warning= FALSE}
+
+ggplot(summary_df_pol, aes(x = Bloc, y = Count, fill = qc19_label)) +
+  geom_bar(stat = "identity", color = "black", size = 0.5) +
+  scale_fill_manual(values = c("Yes" = "#a1d99b", "No" = "#F44336", "DK" = "#B0BEC5")) +
+  labs(title = "Transgender Document Change Support-Historical Bloc", x = "Bloc", y = "Count", fill = "Response") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.title.position = "top",
+        legend.position = "top",
+        legend.key.size = unit(0.3, "cm"),
+        panel.grid.major.x = element_blank())
+
+```
+
+## Generations
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+
+# before plotting, let's summarize each generation and create percentages for support/rejection levels
+
+gen_summary <- rbind(
+  data |> 
+    filter(gen3 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "Before 1946", Percentage = Count / sum(Count) * 100),
+  data |> 
+    filter(gen4 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "1946-1964", Percentage = Count / sum(Count) * 100),
+  data |> 
+    filter(gen5 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "1965-1980", Percentage = Count / sum(Count) * 100),
+  data |> 
+    filter(gen6 == 1) |> 
+    group_by(qc19) |> 
+    summarise(Count = n()) |> 
+    mutate(Generation = "After 1980", Percentage = Count / sum(Count) * 100)
+) |> 
+  mutate(Generation = factor(Generation, levels = c("Before 1946", "1946-1964", "1965-1980", "After 1980")))
+
+
+```
+
+```{r warning= FALSE}
+# visualizing
+
+ggplot(gen_summary, aes(x = qc19, y = Percentage, fill = Generation)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), 
+            position = position_dodge(width = 0.9), vjust = -1, size = 3) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "LGBT Documentation Rights - Generation", x = "", y = "Support percentage", fill = "Generation") +
+  theme_minimal()
+
+```
+
+## Religion
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+
+
+# Recoding all Muslim categories since. They are a minority and summing them up could be better
+summary_df_rel <- data |> 
+  mutate(sd3_recode = case_when(
+    sd3 %in% c(6, 7, 8) ~ 7,  #  sunni, shia, and other into one muslim level
+    TRUE ~ sd3
+  )) %>%
+  group_by(sd3_recode, qc19) |> 
+  summarise(Count = n()) |> 
+  group_by(sd3_recode) |> 
+  mutate(Percentage = Count / sum(Count) * 100) |> 
+  ungroup() |> 
+  mutate(sd3_recode = factor(sd3_recode, levels = c(1, 2, 3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15, 16),
+                             labels = c("Catholic", "Orthodox Christian", "Protestant", "Other Christian", "Jewish", "Muslim", "Sikh", "Buddhist", "Hindu", "Atheist", "Non-believer/Agnostic", "Other", "Refusal", "DK")))
+
+
+
+```
+
+```{r warning= FALSE}
+# plotting
+ggplot(summary_df_rel, aes(x = sd3_recode, y = Percentage, fill = qc19)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Yes" = "#a0d6b3", "No" = "#e6886f", "DK" = "#B0BEC5")) +
+  labs(title = "QC19 Responses by Religion/Beliefs",
+       x = "Religion/Beliefs", y = "Percentage", fill = "Response") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Political Ideology - self reports
+
+```{r}
+
+d1r2_props <- data %>%
+  group_by(d1r2) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(proportion = count / sum(count),
+         d1r2_label = factor(d1r2, levels = c(1, 2, 3, 4, 5, 9),
+                             labels = c("(1-2) Left", "(3-4)", "(5-6) Centre", 
+                                        "(7-8)", "(9-10) Right", "DK/Refusal"))) %>%
+  select(d1r2_label, count, proportion)
+```
+
+```{r}
+ggplot(d1r2_props, aes(x = d1r2_label, y = proportion, fill = d1r2_label)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Political Ideology Self-Reports",
+       x = "Political Orientation",
+       y = "Proportion") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3") + # Optional: Use a color palette
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Societal attitudes
+
+-   Correlations between discrimination perceptions and demographic variables
+
+```{r}
+#| echo: false
+# Convert categorical variables to numeric 
+data <- data |> 
+  mutate(
+    d10_num = as.numeric(d10),
+    qc1_4_num = as.numeric(qc1_4),
+    qc1_8_num = as.numeric(qc1_8),
+    d11 = as.numeric(d11),
+    d8_num = as.numeric(d8)  
+  )
+
+cor_matrix <- cor(data[, c("qc1_4_num", "qc1_8_num", "d11", "d10_num", "d8_num")], use = "complete.obs")
+
+```
+
+```{r}
+ggcorrplot(cor_matrix, lab = TRUE, colors = c("blue", "white", "red"))
+```
+
+
+## Economic variables
+
+-   Economic questions from the survey: internac_trade = qa1, trade_tariffs = qa12, trade_agreements = qa13, online_purchases = qa14, occupation = d15a, urban_rural = d25 or social_class = d63.
+
+-   3 new external variables per country:
+
+    /- Actual individual consumption (AIC): value of products actually consumed by individuals.
+
+    /- Unemployment rate
+
+    /- Minimum wage
+
+```{r include=FALSE}
+
+#| message: false
+#| warning: false
+
+# Let´s first select our variables of interest:
+economic_data <- data |> select(
+  "qc19", "country_name", "d11", "qa1", "qa12", "qa13", "qa14", "qa17","d15a", "d15b", "d25", "d60", "d63") |> 
+  rename(age = d11, 
+         internac_trade = qa1,
+         trade_tariffs = qa12,
+         trade_agreements = qa13,
+         online_purchases = qa14,
+         trust_EU_trade = qa17,
+         occupation = d15a,
+         past_occupation = d15b,
+         urban_rural = d25,
+         financial_difficulties = d60,
+         social_class = d63
+     )
+
+
+
+# We will get the Actual Individual Consumption metric
+
+# While GDP is mainly an indicator of the level of economic activity, actual individual consumption (AIC) is an alternative indicator better adapted to describe the material welfare of households. found here (https://ec.europa.eu/eurostat/statistics-explained/index.php?title=GDP_per_capita,_consumption_per_capita_and_price_level_indices#Data_sources)
+
+AIC_per_capita <- read_excel("AIC_per_capita.xlsx")
+
+AIC_per_capita <- AIC_per_capita |> rename("countries"="TIME")
+
+AIC_per_capita
+# We will get the unemployment rate
+
+unemployment_rate <- read_excel("unemployment_rate.xlsx")
+unemployment_rate <-unemployment_rate |>  pivot_longer(-countries, names_to = "years", values_to = "unemployment_rate") |> filter(years == 2019) |> select(-years)
+unemployment_rate$unemployment_rate <- as.numeric(unemployment_rate$unemployment_rate)
+
+unemployment_rate
+# We will get the minimum wage
+minimum_wage <- read_excel("EU_minimum_wage.xlsx")
+minimum_wage <- minimum_wage |> pivot_longer(-countries, names_to = "years", values_to = "min_wage")|> filter(years == 2019) |> select(-years)
+minimum_wage$min_wage <- as.numeric(minimum_wage$min_wage)
+minimum_wage
+
+# Merge the economic variables: 
+
+AIC_and_unemployment <- full_join(AIC_per_capita, unemployment_rate, by = "countries")
+economic_variables <- full_join(AIC_and_unemployment,minimum_wage, by = "countries")
+economic_variables
+
+# Finally, we merge the original survey data with the new economic variables
+economic_data <- economic_data |> left_join(economic_variables, by = c("country_name" = "countries"))
+
+economic_data# Let´s first select our variables of interest:
+economic_data <- data |> select(
+  "qc19", "country_name", "d11", "qa1", "qa12", "qa13", "qa14", "qa17","d15a", "d15b", "d25", "d60", "d63") |> 
+  rename(age = d11, 
+         internac_trade = qa1,
+         trade_tariffs = qa12,
+         trade_agreements = qa13,
+         online_purchases = qa14,
+         trust_EU_trade = qa17,
+         occupation = d15a,
+         past_occupation = d15b,
+         urban_rural = d25,
+         financial_difficulties = d60,
+         social_class = d63
+     )
+
+
+
+# We will get the Actual Individual Consumption metric
+
+# While GDP is mainly an indicator of the level of economic activity, actual individual consumption (AIC) is an alternative indicator better adapted to describe the material welfare of households. found here (https://ec.europa.eu/eurostat/statistics-explained/index.php?title=GDP_per_capita,_consumption_per_capita_and_price_level_indices#Data_sources)
+
+AIC_per_capita <- read_excel("AIC_per_capita.xlsx")
+
+AIC_per_capita <- AIC_per_capita |> rename("countries"="TIME")
+
+AIC_per_capita
+# We will get the unemployment rate
+
+unemployment_rate <- read_excel("unemployment_rate.xlsx")
+unemployment_rate <-unemployment_rate |>  pivot_longer(-countries, names_to = "years", values_to = "unemployment_rate") |> filter(years == 2019) |> select(-years)
+unemployment_rate$unemployment_rate <- as.numeric(unemployment_rate$unemployment_rate)
+
+unemployment_rate
+# We will get the minimum wage
+minimum_wage <- read_excel("EU_minimum_wage.xlsx")
+minimum_wage <- minimum_wage |> pivot_longer(-countries, names_to = "years", values_to = "min_wage")|> filter(years == 2019) |> select(-years)
+minimum_wage$min_wage <- as.numeric(minimum_wage$min_wage)
+minimum_wage
+
+# Merge the economic variables: 
+
+AIC_and_unemployment <- full_join(AIC_per_capita, unemployment_rate, by = "countries")
+economic_variables <- full_join(AIC_and_unemployment,minimum_wage, by = "countries")
+economic_variables
+
+# Finally, we merge the original survey data with the new economic variables
+economic_data <- economic_data |> left_join(economic_variables, by = c("country_name" = "countries"))
+
+economic_data
+
+
+
+
+
+```
+
+## Multiple Imputation with MICE
+
+-   Na´s in the min_wage variable
+
+-   Most similar distribution is the lasso regression
+
+```{r include=FALSE}
+# I will change those Na with 0. In the past_occupation case, having a 0 will #signify that there was no previous occupation.
+set.seed(123)
+colSums(is.na(economic_data))
+
+cols_to_replace <- c("past_occupation")
+
+
+economic_data <- economic_data |> mutate(across(all_of(cols_to_replace), ~ replace_na(., 0)))
+
+# the rest of the variables with NA´s are due to a lack of information of those countries. They are the external economic variables
+
+# Let's perform multiple imputation on missing values in minimum wage because it reduces bias, preserves variability, and maintains relationships between variables. Unlike complete-case analysis, which can introduce systematic bias and reduce statistical power, MI generates multiple plausible datasets, capturing uncertainty in missing values. This approach is particularly important for economic variables, which are often correlated and not missing completely at random. 
+
+# let´s do it with MICE
+
+
+variables <- c("original", "imputed_pmm", "imputed_cart", "imputed_lasso")
+titles <- c("Original Data", "Predictive Mean Matching", "Classification & Regression Trees", "Lasso Regression")
+colors_fill <- c("black", "#E69F00", "#56B4E9", "#009E73")
+
+
+min_wage_mice_imputed <- data.frame(
+  original = economic_variables$min_wage,
+  imputed_pmm = complete(mice(economic_variables, m=5, method = "pmm", seed=123))$min_wage,
+  imputed_cart = complete(mice(economic_variables, m=5, method = "cart", seed=123))$min_wage,
+  imputed_lasso = complete(mice(economic_variables, m=5, method = "lasso.norm", seed=123))$min_wage
+)
+
+# --- the most similar distribution for min_wage is the lasso regression
+min_wage_mice_imputed_long <- min_wage_mice_imputed |> 
+  pivot_longer(all_of(variables), names_to = "method", values_to = "value")
+
+
+
+
+
+
+# Now let´s integrate the imputed values into the original table:
+
+economic_variables <- economic_variables |> 
+  mutate(
+    min_wage = ifelse(is.na(min_wage), min_wage_mice_imputed$imputed_lasso, min_wage)
+  )
+data <- data |> left_join(economic_variables, by = c("country_name" = "countries"))
+
+
+```
+
+```{r}
+#| warning: false
+min_wage_mice_imputed_long |> 
+  mutate(title = factor(method, levels = variables, labels = titles)) |> 
+
+ggplot(aes(x = value, fill = title)) +
+  geom_histogram(binwidth = 1, color = "#808080", position = "identity") +
+  facet_wrap(~title, scales = "free_y") +
+  scale_fill_manual(values = colors_fill) +
+  theme_classic() +
+  theme(legend.position = "none")
+a <- ggplot(data, aes(x = as.factor(qa1), fill = as.factor(qc19))) +
+  geom_bar(position = "dodge") +
+  labs(title = "Support for Trans Rights by International Trade Benefit",
+       x = "International Trade Benefit", 
+       y = "Count", 
+       fill = "Support for Trans Rights (qc19)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Graph: International Trade Benefit.
+
+International trade benefit -\> - 1: yes, benefitting a lot - 2: yes, benefitting somewhat - 3: No, not really benefitting 4: No, not benefitting at all 5: DK.
+
+```{r}
+ 
+a
+```
+
+## Feature engineering + Multicollinearity
+
+```{r}
+#| echo: false
+data_selected <- data |> select(
+  country_name, region, LGBT..Policy.Index, 
+  qc19_numeric, qc20,    
+  qc15_1, qc15_2, qc15_3,    
+  qc17_3, qc17_4, qc18_2, qc18_3,  
+  qc1_4, qc1_8, qc2_4, qc2_6, qc4_7, qc4_8, qc5_3,
+  d11, d15a, d15b, d25, d60, d63,  
+  qa1, qa12, qa13, qa14, qa17,   
+  unemployment_rate, min_wage, AIC,
+  sd3, d1r2, d10, gen3, gen6
+)
+
+data_selected$country_name <- as.factor(data_selected$country_name)
+data_selected$region <- as.factor(data_selected$region)
+
+factor_vars <- names(data_selected)[sapply(data_selected, is.factor)]
+
+chi_results <- numeric(length(factor_vars))
+names(chi_results) <- factor_vars
+
+for (var in factor_vars) {
+  test <- chisq.test(table(data_selected[[var]], data_selected$qc19_numeric))
+  chi_results[var] <- test$p.value  
+}
+
+chi_results <- sort(chi_results)
+
+```
+
+```{r}
+#| echo: false
+cor_matrix <- cor(data_selected[, sapply(data_selected, is.numeric)], use = "pairwise.complete.obs")
+```
+
+
+```{r, fig.width=12, fig.height=10, out.width="100%"}
+ggcorrplot(cor_matrix, lab = TRUE, lab_size = 3, tl.cex = 8, insig = "blank")  + theme_minimal()
+```
+
+
+## Model
+
+-   Step: AIC=8607.78 qc19_numeric ~ country_name + qc20 + qc15_1 + qc15_2 + qc15_3 + qc17_3 + qc17_4 + qc18_2 + qc18_3 + qc1_4 + qc4_7 + qc4_8 + qc5_3 + d11 + d15a + d15b + d60 + qa1 + qa14 + d10
+-   Scaled numerical values and removed non-significant variables
+-   Checked for NA's
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+#| echo: false
+data_selected <- data_selected %>%
+  select(-gen6, -gen3)
+
+best_model <- MASS::stepAIC(glm(qc19_numeric ~ ., data = data_selected, family = binomial), direction = "both")
+
+
+data_selected <- data_selected |> 
+  mutate(
+    d11_scaled = scale(d11),
+    d15a_scaled = scale(d15a),
+    d15b_scaled = scale(d15b),
+    d60_scaled = scale(d60)
+  )
+
+
+# Let´s check for na´s
+
+colSums(is.na(data_selected))
+
+data_selected$qc19_numeric[is.na(data_selected$qc19_numeric)] <- median(data_selected$qc19_numeric,na.rm=TRUE)
+data_selected <- data_selected |> select(-d60)
+data_selected <- data_selected |> select(-d15b_scaled)
+
+data_selected %>%
+  select(where(is.numeric)) %>%
+  correlate() %>%
+  focus(d15b)
+```
+
+## Imputation
+
+-   Replace NA's in target variable with median
+-   Apply MICE for the other variables
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+#| echo: false
+vars_for_imputation <- data_selected %>%
+  select(d15b, d15a, d11_scaled, d60_scaled, d1r2)
+str(vars_for_imputation)
+
+vars_for_imputation <- vars_for_imputation %>%
+  mutate(
+    d11_scaled = as.numeric(d11_scaled),
+    d60_scaled = as.numeric(d60_scaled)
+)
+
+vars_for_imputation <- vars_for_imputation %>%
+  mutate(across(where(is.labelled),as.numeric))
+imputed_data <- mice(vars_for_imputation, method = "pmm", m = 5, maxit = 50, seed = 123)
+```
+
+
+```{r}
+summary(imputed_data)
+
+```
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+#| echo: false
+data_selected$d15b <- complete(imputed_data)$d15b
+
+na_count <- colSums(is.na(data_selected))
+
+
+na_percentage <- (na_count / nrow(data_selected)) * 100
+
+na_data <- data.frame(Variable = names(na_count), NA_Count = na_count, NA_Percentage = na_percentage)
+na_data <- na_data[na_data$NA_Count > 0, ]
+print(na_data)
+
+```
+
+## GLMER Model
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+#| echo: false
+data_selected <- head(data_selected, 1000)
+```
+
+
+```{r echo=TRUE, results='hide', message= FALSE, warning=FALSE}
+glmer_model_alt <- glmer(qc19_numeric ~ d10 + d11_scaled + I(d11_scaled^2) + qc20 + 
+                        qc15_1 + qc15_2 + qc15_3 + qc17_3 + qc17_4 + 
+                        qc1_4 + qc4_7 + d15b + qa1 + (1 | country_name), 
+                      data = data_selected, family = binomial,
+                      control = glmerControl(optimizer = "nloptwrap", 
+                                             optCtrl = list(maxfun = 300000)))
+```
+
+
+```{r message= FALSE, warning= FALSE}
+summary(glmer_model_alt)
+
+```
+
+## 
+
+-   Multicollinearity revised with VIF --> <2 no problem
+-   Model precision: 
+```{r}
+#| echo: false
+vif_values <- car::vif(glmer_model_alt)
+
+pred_probs_glmer <- predict(glmer_model_alt, newdata = data_selected, type = "response")
+
+pred_classes_glmer <- ifelse(pred_probs_glmer > 0.5, 1, 0)
+
+conf_matrix_glmer <- table(data_selected$qc19_numeric, pred_classes_glmer)
+
+accuracy_glmer <- sum(diag(conf_matrix_glmer)) / sum(conf_matrix_glmer)
+precision_glmer <- conf_matrix_glmer[2,2] / sum(conf_matrix_glmer[,2])
+recall_glmer <- conf_matrix_glmer[2,2] / sum(conf_matrix_glmer[2,])
+f1_score_glmer <- 2 * ((precision_glmer * recall_glmer) / (precision_glmer + recall_glmer))
+```
+
+
+```{r}
+library(knitr)
+metrics <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = round(c(accuracy_glmer, precision_glmer, recall_glmer, f1_score_glmer), 4)
+)
+kable(metrics)
+```
+
+## ROC / AUC
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+#| echo: false
+# ROC y AUC
+roc_glmer <- roc(data_selected$qc19_numeric, pred_probs_glmer)
+auc_glmer <- auc(roc_glmer)
+```
+
+
+```{r}
+# compute ROC curve
+plot(roc_glmer, col = "blue", main = paste("ROC Curve - GLMER | AUC:", round(auc_glmer, 3)))
+```
+
+
+```{r}
+#| echo: false
+# Find the best threshold
+optimal_threshold <- coords(roc_glmer, "best", ret = "threshold")
+
+# Apply the new threshold
+pred_classes_optimal <- ifelse(pred_probs_glmer > optimal_threshold, 1, 0)
+
+```
+
+## Random Forest
+```{r message= FALSE, warning= FALSE,include=FALSE}
+#| echo: false
+library(randomForest)
+```
+
+
+```{r echo=TRUE, results='hide', message= FALSE, warning= FALSE}
+rf_model <- randomForest(qc19_numeric ~ ., data = data_selected, ntree = 500, importance = TRUE)
+```
+
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+#| echo: false
+# Prediction and evaluation
+rf_pred <- predict(rf_model, newdata = data_selected)
+conf_matrix_rf <- table(data_selected$qc19_numeric, rf_pred)
+accuracy_rf <- sum(diag(conf_matrix_rf)) / sum(conf_matrix_rf)
+```
+
+
+```{r message= FALSE, warning= FALSE}
+varImpPlot(rf_model)
+```
+
+## 
+
+-   Training / testing (80-20)
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+#| echo: false
+# training testing
+set.seed(123)
+
+library(caret)
+in_train <- createDataPartition(y = data_selected$qc19_numeric, p = 0.8, list = FALSE)
+
+in_train <- in_train[, 1]
+
+training <- data_selected[in_train, ]
+testing <- data_selected[-in_train, ]
+
+#remove rows with NA's
+training <- na.omit(training)
+testing <- na.omit(testing)
+f_predictions <- predict(rf_model, testing, type = "response")
+
+# Convert to binary classes (0.5 threshold)
+rf_pred_classes <- ifelse(rf_pred > 0.5, 1, 0)
+
+# confusion matrix
+rf_predictions <- predict(rf_model, testing, type = "class")  # Debería ser "class" en lugar de "response"
+
+rf_pred_classes <- ifelse(rf_predictions == 1, 1, 0)
+
+
+conf_matrix_rf <- table(testing$qc19_numeric, rf_pred_classes)
+print(conf_matrix_rf)
+
+# Accuracy, Precision, Recall y F1-Score
+accuracy_rf <- sum(diag(conf_matrix_rf)) / sum(conf_matrix_rf)
+precision_rf <- conf_matrix_rf[2,2] / sum(conf_matrix_rf[,2])
+recall_rf <- conf_matrix_rf[2,2] / sum(conf_matrix_rf[2,])
+f1_score_rf <- 2 * ((precision_rf * recall_rf) / (precision_rf + recall_rf))
+```
+
+```{r message= FALSE, warning= FALSE,include=FALSE}
+#| echo: false
+library(knitr)
+metrics_comparison <- data.frame(
+  Model = c("Random Forest", "Our Model"),
+  Accuracy = round(c(accuracy_rf, accuracy_glmer), 4),
+  Precision = round(c(precision_rf, precision_glmer), 4),
+  Recall = round(c(recall_rf, recall_glmer), 4),
+  `F1-Score` = round(c(f1_score_rf, f1_score_glmer), 4)
+)
+
+```
+
+```{r}
+kable(metrics_comparison)
+```
+
+## Additional model with 2 more variables
+
+```{r echo=TRUE, results='hide', message= FALSE, warning=FALSE}
+glmer_model_alt2.0 <- glmer(qc19_numeric ~ d10 + d11_scaled + I(d11_scaled^2) + qc20 + 
+                        qc15_1 + qc15_2 + qc15_3 + qc17_3 + qc17_4 + sd3 + d1r2 +
+                        qc1_4 + qc4_7 + d15b + qa1 + (1 | country_name), 
+                      data = data_selected, family = binomial,
+                      control = glmerControl(optimizer = "nloptwrap", 
+                                             optCtrl = list(maxfun = 300000)))
+```
+
+
+```{r}
+#| echo: false
+pred_probs_glmer2.0 <- predict(glmer_model_alt2.0, newdata = data_selected, type = "response")
+
+pred_classes_glmer2.0 <- ifelse(pred_probs_glmer2.0 > 0.5, 1, 0)
+
+conf_matrix_glmer <- table(data_selected$qc19_numeric, pred_classes_glmer2.0)
+
+accuracy_glmer <- sum(diag(conf_matrix_glmer)) / sum(conf_matrix_glmer)
+precision_glmer <- conf_matrix_glmer[2,2] / sum(conf_matrix_glmer[,2])
+recall_glmer <- conf_matrix_glmer[2,2] / sum(conf_matrix_glmer[2,])
+f1_score_glmer <- 2 * ((precision_glmer * recall_glmer) / (precision_glmer + recall_glmer))
+```
+
+```{r}
+metrics <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = round(c(accuracy_glmer, precision_glmer, recall_glmer, f1_score_glmer), 4)
+)
+kable(metrics)
+```
+
+
